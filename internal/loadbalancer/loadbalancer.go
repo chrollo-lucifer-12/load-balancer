@@ -2,7 +2,6 @@ package loadbalancer
 
 import (
 	"log"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -29,22 +28,23 @@ func NewLoadBalancer(backendURLs []string, healthCheckInterval time.Duration, ma
 			return nil
 		}
 
-		backends[i] = &backend.Backend{
+		b := &backend.Backend{
 			URL:          url,
 			Alive:        true,
 			ReverseProxy: httputil.NewSingleHostReverseProxy(url),
 		}
 
-		backends[i].ReverseProxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-			backend := backends[i]
-			failCount := backend.IncreaseFailCount()
+		b.ReverseProxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+
+			failCount := b.IncreaseFailCount()
 
 			if failCount >= maxFailCount {
-				log.Printf("Backend %s is marked as down due to too many failures", backend.URL.Host)
-				backend.SetAlive(false)
+				log.Printf("Backend %s is marked as down due to too many failures", b.URL.Host)
+				b.SetAlive(false)
 			}
 
 			lb := r.Context().Value("loadbalancer").(*LoadBalancer)
+
 			if newBackend := lb.NextBackend(); newBackend != nil {
 				log.Printf("Retrying request on backend %s", newBackend.URL.Host)
 				newBackend.ReverseProxy.ServeHTTP(w, r)
@@ -53,6 +53,8 @@ func NewLoadBalancer(backendURLs []string, healthCheckInterval time.Duration, ma
 
 			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 		}
+
+		backends[i] = b
 	}
 
 	lb := &LoadBalancer{
@@ -84,14 +86,21 @@ func (lb *LoadBalancer) NextBackend() *backend.Backend {
 }
 
 func isBackendAlive(u *url.URL) bool {
-	timeout := 1 * time.Second
-	conn, err := net.DialTimeout("tcp", u.Host, timeout)
+	client := http.Client{
+		Timeout: time.Second,
+	}
+
+	healthURL := *u
+	healthURL.Path = "/health"
+
+	resp, err := client.Get(healthURL.String())
 	if err != nil {
-		log.Printf("Health check failed for %s: %v", u.Host, err)
 		return false
 	}
-	defer conn.Close()
-	return true
+
+	defer resp.Body.Close()
+
+	return resp.StatusCode == http.StatusOK
 }
 
 func (lb *LoadBalancer) healthCheck() {
@@ -103,15 +112,26 @@ func (lb *LoadBalancer) healthCheck() {
 		case <-ticker.C:
 			log.Println("starting health check")
 
-			for _, backend := range lb.backends {
-				alive := isBackendAlive(backend.URL)
-				backend.SetAlive(alive)
-				status := "up"
-				if !alive {
-					status = "down"
-				}
-				log.Printf("backend %s status: %s", backend.URL.Host, status)
+			var wg sync.WaitGroup
+
+			for _, b := range lb.backends {
+				wg.Add(1)
+
+				go func(b *backend.Backend) {
+					defer wg.Done()
+
+					alive := isBackendAlive(b.URL)
+					b.SetAlive(alive)
+					status := "up"
+					if !alive {
+						status = "down"
+					}
+
+					log.Printf("backend %s status: %s", b.URL.Host, status)
+				}(b)
 			}
+
+			wg.Wait()
 			log.Println("health check completed")
 		default:
 			continue

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+	"net/http"
 	"time"
 
 	"github.com/lb/internal/loadbalancer"
@@ -14,11 +16,10 @@ func main() {
 	}
 
 	lb := loadbalancer.NewLoadBalancer(backends, 30*time.Second, 3)
-	// server := http.Server{
-	// 	Addr:    ":8080",
-	// 	Handler: lb,
-	// }
 
-	// log.Printf("Starting load balancer on :8080")
-	// log.Fatal(server.ListenAndServe())
+	log.Println("Load balancer listening on :8080")
+
+	if err := http.ListenAndServe(":8080", http.HandlerFunc(lb.ServerHTTP)); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -1,6 +1,7 @@
 package loadbalancer
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -140,15 +141,24 @@ func (lb *LoadBalancer) healthCheck() {
 }
 
 func (lb *LoadBalancer) ServerHTTP(w http.ResponseWriter, r *http.Request) {
-	backend := lb.NextBackend()
+	ctx := context.WithValue(
+		r.Context(),
+		"loadbalancer",
+		lb,
+	)
 
-	if backend == nil {
+	r = r.WithContext(ctx)
+
+	b := lb.NextBackend()
+
+	if b == nil {
 		http.Error(w, "no available backends", http.StatusServiceUnavailable)
 		return
 	}
 
-	log.Printf("forwarding requests to: %s", backend.URL)
-	backend.ReverseProxy.ServeHTTP(w, r)
+	log.Printf("forwarding request to: %s", b.URL)
 
-	backend.ResetFailCount()
+	b.ReverseProxy.ServeHTTP(w, r)
+
+	b.ResetFailCount()
 }

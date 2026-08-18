@@ -3,23 +3,23 @@ package main
 import (
 	"log"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
+
+	"github.com/lb/internal/loadbalancer"
 )
 
 func main() {
-	targetURL, err := url.Parse("http://localhost:8081")
-	if err != nil {
-		log.Fatal(err)
+	backends := []string{
+		"http://localhost:8081",
+		"http://localhost:8082",
+		"http://localhost:8083",
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(targetURL)
-
+	lb := loadbalancer.NewLoadBalancer(backends)
 	server := http.Server{
 		Addr:    ":8080",
-		Handler: proxy,
+		Handler: lb,
 	}
 
-	log.Printf("starting load balancer on :8080")
+	log.Printf("Starting load balancer on :8080")
 	log.Fatal(server.ListenAndServe())
 }

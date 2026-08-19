@@ -15,7 +15,7 @@ func main() {
 		"http://localhost:8083",
 	}
 
-	lb := loadbalancer.NewLoadBalancer(backends, 30*time.Second, 3)
+	lb := loadbalancer.NewLoadBalancer(backends, 30*time.Second, 3, 1)
 
 	log.Println("Load balancer listening on :8080")
 

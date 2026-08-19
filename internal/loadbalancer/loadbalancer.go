@@ -59,6 +59,8 @@ func (lb *LoadBalancer) ServerHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	backend.IncreaseActive()
+
 	log.Printf("forwarding request to: %s", backend.URL)
 
 	backend.ReverseProxy.ServeHTTP(w, r)

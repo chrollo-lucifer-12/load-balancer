@@ -5,15 +5,18 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"sync"
+	"sync/atomic"
 )
 
 type Backend struct {
-	URL          *url.URL
-	Alive        bool
+	URL *url.URL
+
+	Alive atomic.Bool
+
 	ReverseProxy *httputil.ReverseProxy
-	mu           sync.RWMutex
-	failCount    int
+
+	failCount atomic.Int64
+	active    atomic.Int64
 }
 
 func NewBackend(rawURL string) (*Backend, error) {
@@ -23,19 +26,17 @@ func NewBackend(rawURL string) (*Backend, error) {
 	}
 
 	backend := &Backend{
-		URL:       u,
-		Alive:     true,
-		failCount: 0,
+		URL: u,
 	}
+
+	backend.Alive.Store(true)
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		log.Printf("backend %s failed: %v", u, err)
 
-		backend.mu.Lock()
-		backend.failCount++
-		backend.mu.Unlock()
+		backend.IncreaseFailCount()
 
 		http.Error(w, "Backend unavailable", http.StatusBadGateway)
 	}
@@ -46,31 +47,33 @@ func NewBackend(rawURL string) (*Backend, error) {
 }
 
 func (b *Backend) SetAlive(alive bool) {
-	b.mu.Lock()
-	b.Alive = alive
-	if alive {
-		b.failCount = 0
-	}
-	b.mu.Unlock()
+	b.Alive.Store(alive)
 }
 
 func (b *Backend) IsAlive() bool {
-	b.mu.RLock()
-	alive := b.Alive
-	b.mu.RUnlock()
-	return alive
+	return b.Alive.Load()
 }
 
-func (b *Backend) IncreaseFailCount() int {
-	b.mu.Lock()
-	b.failCount++
-	count := b.failCount
-	b.mu.Unlock()
-	return count
+func (b *Backend) IncreaseFailCount() int64 {
+	return b.failCount.Add(1)
 }
 
 func (b *Backend) ResetFailCount() {
-	b.mu.Lock()
-	b.failCount = 0
-	b.mu.Unlock()
+	b.failCount.Store(0)
+}
+
+func (b *Backend) FailCount() int64 {
+	return b.failCount.Load()
+}
+
+func (b *Backend) IncreaseActive() int64 {
+	return b.active.Add(1)
+}
+
+func (b *Backend) DecreaseActive() int64 {
+	return b.active.Add(-1)
+}
+
+func (b *Backend) Active() int64 {
+	return b.active.Load()
 }

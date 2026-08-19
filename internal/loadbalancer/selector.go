@@ -1,6 +1,10 @@
 package loadbalancer
 
-import "github.com/lb/internal/backend"
+import (
+	"math/rand"
+
+	"github.com/lb/internal/backend"
+)
 
 func (lb *LoadBalancer) chooseBackend() *backend.Backend {
 
@@ -27,4 +31,22 @@ func (lb *LoadBalancer) roundRobin() *backend.Backend {
 	}
 
 	return nil
+}
+
+func (lb *LoadBalancer) powerOfTwo() *backend.Backend {
+	i := rand.Intn(len(lb.backends))
+	j := rand.Intn(len(lb.backends))
+
+	for j == i {
+		j = rand.Intn(len(lb.backends))
+	}
+
+	b1 := lb.backends[i]
+	b2 := lb.backends[j]
+
+	if b1.Active() <= b2.Active() {
+		return b1
+	}
+
+	return b2
 }

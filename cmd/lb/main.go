@@ -5,21 +5,30 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/lb/internal/config"
 	"github.com/lb/internal/loadbalancer"
 )
 
 func main() {
-	backends := []string{
-		"http://localhost:8081",
-		"http://localhost:8082",
-		"http://localhost:8083",
+	cfg, err := config.Load("test.yml")
+	if err != nil {
+		panic(err)
 	}
 
-	lb := loadbalancer.NewLoadBalancer(backends, 30*time.Second, 3, 1)
+	var backends []string
 
-	log.Println("Load balancer listening on :8080")
+	for _, backend := range cfg.Backends {
+		backends = append(backends, backend.URL)
+	}
 
-	if err := http.ListenAndServe(":8080", http.HandlerFunc(lb.ServerHTTP)); err != nil {
+	maxFailCount := cfg.LoadBalancer.HealthCheck.MaxFailures
+	interval := cfg.LoadBalancer.HealthCheck.Interval
+
+	lb := loadbalancer.NewLoadBalancer(backends, time.Duration(interval)*time.Second, maxFailCount, 1)
+
+	log.Println("Load balancer listening on ", cfg.Server.Port)
+
+	if err := http.ListenAndServe(cfg.Server.Port, http.HandlerFunc(lb.ServerHTTP)); err != nil {
 		log.Fatal(err)
 	}
 }

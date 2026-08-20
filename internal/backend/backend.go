@@ -2,6 +2,7 @@ package backend
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -10,6 +11,18 @@ import (
 )
 
 var transport = &http.Transport{
+
+	DialContext: (&net.Dialer{
+		Timeout:   5 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext,
+
+	TLSHandshakeTimeout: 5 * time.Second,
+
+	ResponseHeaderTimeout: 10 * time.Second,
+
+	DisableKeepAlives: true,
+
 	MaxIdleConns:        100,
 	MaxIdleConnsPerHost: 20,
 	MaxConnsPerHost:     100,

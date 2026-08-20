@@ -6,7 +6,15 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"sync/atomic"
+	"time"
 )
+
+var transport = &http.Transport{
+	MaxIdleConns:        100,
+	MaxIdleConnsPerHost: 20,
+	MaxConnsPerHost:     100,
+	IdleConnTimeout:     90 * time.Second,
+}
 
 type Backend struct {
 	URL *url.URL
@@ -31,14 +39,26 @@ func NewBackend(rawURL string) (*Backend, error) {
 
 	backend.Alive.Store(true)
 
-	proxy := httputil.NewSingleHostReverseProxy(u)
+	proxy := &httputil.ReverseProxy{
+		Transport: transport,
 
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("backend %s failed: %v", u, err)
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			originalHost := pr.In.Host
 
-		backend.IncreaseFailCount()
+			pr.SetURL(u)
 
-		http.Error(w, "Backend unavailable", http.StatusBadGateway)
+			pr.Out.Host = originalHost
+
+			pr.SetXForwarded()
+		},
+
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("backend %s failed: %v", u, err)
+
+			backend.IncreaseFailCount()
+
+			http.Error(w, "Backend unavailable", http.StatusBadGateway)
+		},
 	}
 
 	backend.ReverseProxy = proxy

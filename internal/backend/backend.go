@@ -105,15 +105,8 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 	return backend, nil
 }
 
-func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request, maxFailCount int64) {
-	_, err := b.cb.Call(func() (any, error) {
-		b.ReverseProxy.ServeHTTP(w, r)
-		return nil, nil
-	})
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-	}
+func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	b.ReverseProxy.ServeHTTP(w, r)
 }
 
 func (b *Backend) RecordSuccess() {

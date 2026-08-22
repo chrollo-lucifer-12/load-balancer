@@ -23,12 +23,18 @@ func (lb *LoadBalancer) roundRobin() *backend.Backend {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
+	n := len(lb.backends)
+	if n == 0 {
+		return nil
+	}
+
 	initialIndex := lb.current
 
-	for i := 0; i < len(lb.backends); i++ {
-		idx := (initialIndex + i) % len(lb.backends)
+	for i := 0; i < n; i++ {
+		idx := (initialIndex + i) % n
+
 		if lb.backends[idx].IsAlive() {
-			lb.current = idx
+			lb.current = (idx + 1) % n
 			return lb.backends[idx]
 		}
 	}

@@ -138,6 +138,10 @@ func (b *Backend) IsAlive() bool {
 	return b.Alive.Load()
 }
 
+func (b *Backend) IncrementFailCount() {
+	b.failCount.And(1)
+}
+
 func (b *Backend) IncrementActive() int64 {
 	return b.active.Add(1)
 }

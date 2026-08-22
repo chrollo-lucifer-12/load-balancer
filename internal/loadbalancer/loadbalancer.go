@@ -1,6 +1,7 @@
 package loadbalancer
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"sync"
@@ -14,6 +15,7 @@ type Strategy int
 
 const (
 	RoundRobin Strategy = iota
+	PowerOfTwo
 )
 
 type LoadBalancer struct {
@@ -55,15 +57,42 @@ func NewLoadBalancer(backendConfigs []config.BackendConfig, healthCheckInterval 
 }
 
 func (lb *LoadBalancer) ServerHTTP(w http.ResponseWriter, r *http.Request) {
-	backend := lb.chooseBackend()
-	if backend == nil {
-		http.Error(w, "No available backends", http.StatusServiceUnavailable)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	r = r.WithContext(ctx)
+
+	attempts := 3
+
+	rec := NewResponseBuffer(w)
+
+	for i := 1; i <= attempts; i++ {
+		backend := lb.chooseBackend()
+		if backend == nil {
+			http.Error(w, "No available backends", http.StatusServiceUnavailable)
+			return
+		}
+
+		backend.IncrementActive()
+
+		log.Printf("forwarding request to: %s", backend.URL)
+
+		backend.ReverseProxy.ServeHTTP(rec, r)
+
+		backend.DecrementActive()
+
+		if rec.status >= 500 && isIdempotent(r) {
+			rec.Reset()
+			continue
+		}
+
+		rec.Flush()
 		return
 	}
 
-	backend.IncrementActive()
+	http.Error(w, "All backend retry attempts failed", http.StatusBadGateway)
+}
 
-	log.Printf("forwarding request to: %s", backend.URL)
-
-	backend.ReverseProxy.ServeHTTP(w, r)
+func isIdempotent(r *http.Request) bool {
+	return r.Method == "GET" || r.Method == "HEAD" || r.Method == "PUT" || r.Method == "DELETE"
 }

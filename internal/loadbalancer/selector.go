@@ -11,6 +11,9 @@ func (lb *LoadBalancer) chooseBackend() *backend.Backend {
 	switch lb.strategy {
 	case RoundRobin:
 		return lb.roundRobin()
+	case PowerOfTwo:
+		return lb.powerOfTwo()
+
 	}
 
 	return nil

@@ -77,7 +77,7 @@ func (lb *LoadBalancer) ServerHTTP(w http.ResponseWriter, r *http.Request) {
 
 		log.Printf("forwarding request to: %s", backend.URL)
 
-		backend.ServeHTTP(rec, r, lb.maxFailCount)
+		backend.ServeHTTP(rec, r)
 
 		backend.DecrementActive()
 

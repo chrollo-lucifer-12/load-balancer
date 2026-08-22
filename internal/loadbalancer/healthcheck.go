@@ -46,13 +46,12 @@ func (lb *LoadBalancer) healthCheck() {
 					defer wg.Done()
 
 					alive := isBackendAlive(b.URL)
-					b.SetAlive(alive)
-					status := "up"
-					if !alive {
-						status = "down"
-					}
 
-					log.Printf("backend %s status: %s", b.URL.Host, status)
+					if !alive {
+						b.MarkFailure(lb.maxFailCount)
+					} else {
+						b.MarkSuccess()
+					}
 				}(b)
 			}
 

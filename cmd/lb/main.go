@@ -15,16 +15,10 @@ func main() {
 		panic(err)
 	}
 
-	var backends []string
-
-	for _, backend := range cfg.Backends {
-		backends = append(backends, backend.URL)
-	}
-
 	maxFailCount := cfg.LoadBalancer.HealthCheck.MaxFailures
 	interval := cfg.LoadBalancer.HealthCheck.Interval
 
-	lb := loadbalancer.NewLoadBalancer(backends, time.Duration(interval)*time.Second, maxFailCount, 1)
+	lb := loadbalancer.NewLoadBalancer(cfg.Backends, time.Duration(interval)*time.Second, maxFailCount, 1)
 
 	log.Println("Load balancer listening on ", cfg.Server.Port)
 

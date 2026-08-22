@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lb/internal/backend"
+	"github.com/lb/internal/config"
 )
 
 type Strategy int
@@ -28,11 +29,12 @@ type LoadBalancer struct {
 	strategy Strategy
 }
 
-func NewLoadBalancer(backendURLs []string, healthCheckInterval time.Duration, maxFailCount int, strategy Strategy) *LoadBalancer {
-	backends := make([]*backend.Backend, len(backendURLs))
+func NewLoadBalancer(backendConfigs []config.BackendConfig, healthCheckInterval time.Duration, maxFailCount int, strategy Strategy) *LoadBalancer {
 
-	for i, rawURL := range backendURLs {
-		backend, err := backend.NewBackend(rawURL)
+	backends := make([]*backend.Backend, len(backendConfigs))
+
+	for i, backendConfig := range backendConfigs {
+		backend, err := backend.NewBackend(backendConfig.URL, backendConfig.Weight, maxFailCount)
 		if err != nil {
 			return nil
 		}

@@ -1,13 +1,20 @@
 package backend
 
 import (
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync/atomic"
 	"time"
+)
+
+type BackendState int
+
+const (
+	Healthy BackendState = iota
+	Unhealthy
+	Draining
 )
 
 var transport = &http.Transport{
@@ -32,22 +39,28 @@ var transport = &http.Transport{
 type Backend struct {
 	URL *url.URL
 
+	State atomic.Int32
 	Alive atomic.Bool
 
 	ReverseProxy *httputil.ReverseProxy
 
-	failCount atomic.Int64
-	active    atomic.Int64
+	failCount    atomic.Int64
+	successCount atomic.Int32
+
+	active atomic.Int64
+
+	weight int
 }
 
-func NewBackend(rawURL string) (*Backend, error) {
+func NewBackend(rawURL string, weight int, maxFailCount int) (*Backend, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
 	}
 
 	backend := &Backend{
-		URL: u,
+		URL:    u,
+		weight: weight,
 	}
 
 	backend.Alive.Store(true)
@@ -65,12 +78,14 @@ func NewBackend(rawURL string) (*Backend, error) {
 			pr.SetXForwarded()
 		},
 
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Printf("backend %s failed: %v", u, err)
-
-			backend.IncreaseFailCount()
-
-			http.Error(w, "Backend unavailable", http.StatusBadGateway)
+		ModifyResponse: func(r *http.Response) error {
+			switch {
+			case r.StatusCode >= 500:
+				backend.MarkFailure(maxFailCount)
+			default:
+				backend.MarkSuccess()
+			}
+			return nil
 		},
 	}
 
@@ -79,16 +94,21 @@ func NewBackend(rawURL string) (*Backend, error) {
 	return backend, nil
 }
 
-func (b *Backend) SetAlive(alive bool) {
-	b.Alive.Store(alive)
+func (b *Backend) MarkFailure(maxFail int) {
+	fails := b.failCount.Add(1)
+
+	if fails >= int64(maxFail) {
+		b.Alive.Store(false)
+	}
+}
+
+func (b *Backend) MarkSuccess() {
+	b.failCount.Store(0)
+	b.Alive.Store(true)
 }
 
 func (b *Backend) IsAlive() bool {
 	return b.Alive.Load()
-}
-
-func (b *Backend) IncreaseFailCount() int64 {
-	return b.failCount.Add(1)
 }
 
 func (b *Backend) ResetFailCount() {

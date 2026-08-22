@@ -42,8 +42,7 @@ var transport = &http.Transport{
 type Backend struct {
 	URL *url.URL
 
-	//	State atomic.Int32
-	Alive atomic.Bool // active
+	Alive atomic.Bool
 
 	ReverseProxy *httputil.ReverseProxy
 
@@ -85,8 +84,6 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			backend.RecordFailure(maxFailCount)
-			backend.cb.Record(true)
-
 			w.WriteHeader(http.StatusBadGateway)
 		},
 
@@ -99,8 +96,6 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 				backend.RecordSuccess()
 			}
 
-			backend.cb.Record(failure)
-
 			return nil
 		},
 	}
@@ -108,6 +103,17 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 	backend.ReverseProxy = proxy
 
 	return backend, nil
+}
+
+func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request, maxFailCount int64) {
+	_, err := b.cb.Call(func() (any, error) {
+		b.ReverseProxy.ServeHTTP(w, r)
+		return nil, nil
+	})
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+	}
 }
 
 func (b *Backend) RecordSuccess() {
@@ -126,17 +132,13 @@ func (b *Backend) UpdateActiveStatus(isUp bool) {
 	b.Alive.Store(isUp)
 }
 
-func (b *Backend) CanPass() bool {
-	return b.IsAlive() && b.cb.CanPass()
-}
-
 func (b *Backend) IsAlive() bool {
 	return b.Alive.Load()
 }
 
-// func (b *Backend) IncrementFailCount() {
-// 	b.failCount.Add(1)
-// }
+func (b *Backend) CanPass() bool {
+	return b.Alive.Load() && b.cb.CanPass()
+}
 
 func (b *Backend) IncrementActive() int64 {
 	return b.active.Add(1)

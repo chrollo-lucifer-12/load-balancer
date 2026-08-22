@@ -1,8 +1,12 @@
 package cb
 
 import (
+	"context"
+	"errors"
 	"sync"
 	"time"
+
+	"github.com/lb/internal/metrics"
 )
 
 type CBState int
@@ -16,68 +20,150 @@ const (
 type CircuitBreaker struct {
 	mu sync.Mutex
 
-	cbState CBState
+	state        CBState
+	lastFailedAt time.Time
 
-	metrics *RollingWindow
+	metrics *metrics.RollingWindow
 
-	errorThreshold float64
-	minRequests    int64
+	halfOpenSuccessCount int64
 
-	cbSleepWindow  time.Duration
-	stateChangedAt time.Time
+	errorThreshold      float64
+	halfOpenMaxRequests int64
 
-	halfOpenSuccess int64
+	timeout time.Duration
 }
 
 func NewCircuitBreaker() *CircuitBreaker {
 	return &CircuitBreaker{
-		cbState:        StateClosed,
-		metrics:        NewRollingWindow(10),
-		minRequests:    10,
-		errorThreshold: 0.5,
-		cbSleepWindow:  5 * time.Second,
+		state:               StateClosed,
+		metrics:             metrics.NewRollingWindow(10),
+		halfOpenMaxRequests: 10,
+		errorThreshold:      0.5,
+		timeout:             10 * time.Second,
 	}
+}
+
+func (cb *CircuitBreaker) Call(fn func() (any, error)) (any, error) {
+
+	cb.mu.Lock()
+
+	switch cb.state {
+
+	case StateClosed:
+		cb.mu.Unlock()
+		return cb.handleClosedState(fn)
+
+	case StateOpen:
+		cb.mu.Unlock()
+		return cb.handleOpenState()
+
+	case StateHalfOpen:
+		cb.mu.Unlock()
+		return cb.handleHalfOpenState(fn)
+
+	default:
+		cb.mu.Unlock()
+		return nil, errors.New("unknown circuit state")
+
+	}
+
 }
 
 func (cb *CircuitBreaker) CanPass() bool {
-	switch cb.cbState {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	switch cb.state {
 	case StateClosed:
 		return true
-	case StateHalfOpen:
-		return true
+
 	case StateOpen:
-		if time.Since(cb.stateChangedAt) >= cb.cbSleepWindow {
-			cb.cbState = StateHalfOpen
-			cb.stateChangedAt = time.Now()
-			cb.halfOpenSuccess = 0
+		if time.Since(cb.lastFailedAt) >= cb.timeout {
+			cb.state = StateHalfOpen
+			cb.halfOpenSuccessCount = 0
 			return true
 		}
-
 		return false
+
+	case StateHalfOpen:
+		return true
 	}
+
 	return false
 }
 
-func (cb *CircuitBreaker) Record(isFailure bool) {
-	cb.metrics.Record(isFailure)
+func (cb *CircuitBreaker) handleClosedState(fn func() (any, error)) (any, error) {
+	result, err := cb.runWithTimeout(fn)
 
-	if cb.cbState == StateClosed {
-		errRate, total := cb.metrics.ErrorRate()
-		if total >= cb.minRequests && errRate >= cb.errorThreshold {
-			cb.cbState = StateOpen
-			cb.stateChangedAt = time.Now()
-		}
-	} else if cb.cbState == StateHalfOpen {
-		if isFailure {
-			cb.cbState = StateOpen
-			cb.stateChangedAt = time.Now()
-		} else {
-			cb.halfOpenSuccess++
+	if err != nil {
+		cb.metrics.Record(true)
 
-			if cb.halfOpenSuccess >= 5 {
-				cb.cbState = StateClosed
-				cb.stateChangedAt = time.Now()
-			}
+		errRate, _ := cb.metrics.ErrorRate()
+		if errRate >= cb.errorThreshold {
+			cb.state = StateOpen
 		}
+
+		return nil, err
+	}
+
+	cb.resetCircuit()
+	return result, nil
+}
+
+func (cb *CircuitBreaker) handleOpenState() (any, error) {
+	if time.Since(cb.lastFailedAt) > cb.timeout {
+		cb.state = StateHalfOpen
+		cb.halfOpenSuccessCount = 0
+		return nil, nil
+	}
+
+	return nil, errors.New("circuit open")
+}
+
+func (cb *CircuitBreaker) handleHalfOpenState(fn func() (any, error)) (any, error) {
+	result, err := cb.runWithTimeout(fn)
+
+	if err != nil {
+		cb.state = StateOpen
+		cb.lastFailedAt = time.Now()
+		return nil, err
+	}
+
+	cb.halfOpenSuccessCount++
+
+	if cb.halfOpenSuccessCount >= cb.halfOpenMaxRequests {
+		cb.resetCircuit()
+	}
+
+	return result, nil
+}
+
+func (cb *CircuitBreaker) resetCircuit() {
+	cb.state = StateClosed
+	cb.halfOpenSuccessCount = 0
+}
+
+func (cb *CircuitBreaker) runWithTimeout(fn func() (any, error)) (any, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resultChan := make(chan struct {
+		result any
+		err    error
+	}, 1)
+
+	go func() {
+		result, err := fn()
+		resultChan <- struct {
+			result any
+			err    error
+		}{result, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, errors.New("request timed out")
+	case res := <-resultChan:
+		return res.result, res.err
 	}
 }

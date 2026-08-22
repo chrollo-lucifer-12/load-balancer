@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lb/internal/cb"
+	"github.com/lb/internal/metrics"
 )
 
 type BackendState int32
@@ -46,7 +47,7 @@ type Backend struct {
 
 	ReverseProxy *httputil.ReverseProxy
 
-	failCount atomic.Int64 // passive
+	passive *metrics.RollingWindow
 
 	active atomic.Int64
 	weight int
@@ -61,9 +62,10 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 	}
 
 	backend := &Backend{
-		URL:    u,
-		weight: weight,
-		cb:     cb.NewCircuitBreaker(),
+		URL:     u,
+		weight:  weight,
+		cb:      cb.NewCircuitBreaker(),
+		passive: metrics.NewRollingWindow(30),
 	}
 
 	backend.Alive.Store(true)
@@ -109,28 +111,19 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 }
 
 func (b *Backend) RecordSuccess() {
-	if b.failCount.Load() > 0 {
-		b.failCount.Add(-1)
-	}
+	b.passive.Record(false)
 }
 
 func (b *Backend) RecordFailure(maxFailCount int64) {
-	currentFailures := b.failCount.Load()
+	b.passive.Record(true)
 
-	if currentFailures >= maxFailCount {
+	if b.passive.FailureCount() >= maxFailCount {
 		b.Alive.Store(false)
-		//	b.State.Store(int32(Unhealthy))
 	}
 }
 
 func (b *Backend) UpdateActiveStatus(isUp bool) {
 	b.Alive.Store(isUp)
-
-	// if isUp {
-	// 	b.State.Store(int32(Healthy))
-	// } else {
-	// 	b.State.Store(int32(Unhealthy))
-	// }
 }
 
 func (b *Backend) CanPass() bool {
@@ -141,9 +134,9 @@ func (b *Backend) IsAlive() bool {
 	return b.Alive.Load()
 }
 
-func (b *Backend) IncrementFailCount() {
-	b.failCount.Add(1)
-}
+// func (b *Backend) IncrementFailCount() {
+// 	b.failCount.Add(1)
+// }
 
 func (b *Backend) IncrementActive() int64 {
 	return b.active.Add(1)

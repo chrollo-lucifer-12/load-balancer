@@ -1,4 +1,4 @@
-package cb
+package metrics
 
 import (
 	"sync"
@@ -21,6 +21,22 @@ func NewRollingWindow(windowSizeSeconds int64) *RollingWindow {
 		buckets:    make(map[int64]*MetricsBucket),
 		windowSize: windowSizeSeconds,
 	}
+}
+
+func (rw *RollingWindow) FailureCount() int64 {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+
+	now := time.Now().Unix()
+	rw.cleanup(now)
+
+	var failed int64
+
+	for _, bucket := range rw.buckets {
+		failed += bucket.Failed
+	}
+
+	return failed
 }
 
 func (rw *RollingWindow) Record(isFailure bool) {

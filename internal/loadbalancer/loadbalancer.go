@@ -24,12 +24,12 @@ type LoadBalancer struct {
 
 	healthCheckInterval time.Duration
 
-	maxFailCount int
+	maxFailCount int64
 
 	strategy Strategy
 }
 
-func NewLoadBalancer(backendConfigs []config.BackendConfig, healthCheckInterval time.Duration, maxFailCount int, strategy Strategy) *LoadBalancer {
+func NewLoadBalancer(backendConfigs []config.BackendConfig, healthCheckInterval time.Duration, maxFailCount int64, strategy Strategy) *LoadBalancer {
 
 	backends := make([]*backend.Backend, len(backendConfigs))
 
@@ -61,7 +61,7 @@ func (lb *LoadBalancer) ServerHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	backend.IncreaseActive()
+	backend.IncrementActive()
 
 	log.Printf("forwarding request to: %s", backend.URL)
 

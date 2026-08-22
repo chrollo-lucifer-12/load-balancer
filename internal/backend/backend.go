@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type BackendState int
+type BackendState int32
 
 const (
 	Healthy BackendState = iota
@@ -52,7 +52,7 @@ type Backend struct {
 	weight int
 }
 
-func NewBackend(rawURL string, weight int, maxFailCount int) (*Backend, error) {
+func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -78,12 +78,17 @@ func NewBackend(rawURL string, weight int, maxFailCount int) (*Backend, error) {
 			pr.SetXForwarded()
 		},
 
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			backend.RecordFailure(maxFailCount)
+			w.WriteHeader(http.StatusBadGateway)
+		},
+
 		ModifyResponse: func(r *http.Response) error {
 			switch {
 			case r.StatusCode >= 500:
-				backend.MarkFailure(maxFailCount)
+				backend.RecordFailure(maxFailCount)
 			default:
-				backend.MarkSuccess()
+				backend.RecordSuccess()
 			}
 			return nil
 		},
@@ -94,39 +99,53 @@ func NewBackend(rawURL string, weight int, maxFailCount int) (*Backend, error) {
 	return backend, nil
 }
 
-func (b *Backend) MarkFailure(maxFail int) {
-	fails := b.failCount.Add(1)
+func (b *Backend) RecordSuccess() {
+	b.successCount.Add(1)
 
-	if fails >= int64(maxFail) {
-		b.Alive.Store(false)
+	if b.failCount.Load() > 0 {
+		b.failCount.Add(-1)
+	}
+
+	if b.failCount.Load() == 0 && !b.Alive.Load() {
+		b.Alive.Store(true)
+		b.State.Store(int32(Healthy))
 	}
 }
 
-func (b *Backend) MarkSuccess() {
-	b.failCount.Store(0)
-	b.Alive.Store(true)
+func (b *Backend) RecordFailure(maxFailCount int64) {
+	currentFailures := b.failCount.Load()
+
+	b.successCount.Store(0)
+
+	if currentFailures >= maxFailCount {
+		b.Alive.Store(false)
+		b.State.Store(int32(Unhealthy))
+	}
+}
+
+func (b *Backend) UpdateActiveStatus(isUp bool) {
+	b.Alive.Store(isUp)
+
+	if isUp {
+		b.State.Store(int32(Healthy))
+		b.failCount.Store(0)
+	} else {
+		b.State.Store(int32(Unhealthy))
+	}
 }
 
 func (b *Backend) IsAlive() bool {
 	return b.Alive.Load()
 }
 
-func (b *Backend) ResetFailCount() {
-	b.failCount.Store(0)
-}
-
-func (b *Backend) FailCount() int64 {
-	return b.failCount.Load()
-}
-
-func (b *Backend) IncreaseActive() int64 {
+func (b *Backend) IncrementActive() int64 {
 	return b.active.Add(1)
 }
 
-func (b *Backend) DecreaseActive() int64 {
+func (b *Backend) DecrementActive() int64 {
 	return b.active.Add(-1)
 }
 
-func (b *Backend) Active() int64 {
+func (b *Backend) ActiveCount() int64 {
 	return b.active.Load()
 }

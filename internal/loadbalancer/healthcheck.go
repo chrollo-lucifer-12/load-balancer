@@ -47,11 +47,7 @@ func (lb *LoadBalancer) healthCheck() {
 
 					alive := isBackendAlive(b.URL)
 
-					if !alive {
-						b.MarkFailure(lb.maxFailCount)
-					} else {
-						b.MarkSuccess()
-					}
+					b.UpdateActiveStatus(alive)
 				}(b)
 			}
 

@@ -44,7 +44,7 @@ func (lb *LoadBalancer) powerOfTwo() *backend.Backend {
 	b1 := lb.backends[i]
 	b2 := lb.backends[j]
 
-	if b1.Active() <= b2.Active() {
+	if b1.ActiveCount() <= b2.ActiveCount() {
 		return b1
 	}
 

@@ -1,6 +1,9 @@
 package cb
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type CBState int
 
@@ -11,6 +14,8 @@ const (
 )
 
 type CircuitBreaker struct {
+	mu sync.Mutex
+
 	cbState CBState
 
 	metrics *RollingWindow

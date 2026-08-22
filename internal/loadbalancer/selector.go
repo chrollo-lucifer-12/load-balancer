@@ -33,7 +33,7 @@ func (lb *LoadBalancer) roundRobin() *backend.Backend {
 	for i := 0; i < n; i++ {
 		idx := (initialIndex + i) % n
 
-		if lb.backends[idx].IsAlive() {
+		if lb.backends[idx].CanPass() {
 			lb.current = (idx + 1) % n
 			return lb.backends[idx]
 		}

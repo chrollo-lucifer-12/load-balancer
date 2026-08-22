@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"sync/atomic"
 	"time"
+
+	"github.com/lb/internal/cb"
 )
 
 type BackendState int32
@@ -39,17 +41,17 @@ var transport = &http.Transport{
 type Backend struct {
 	URL *url.URL
 
-	State atomic.Int32
-	Alive atomic.Bool
+	//	State atomic.Int32
+	Alive atomic.Bool // active
 
 	ReverseProxy *httputil.ReverseProxy
 
-	failCount    atomic.Int64
-	successCount atomic.Int32
+	failCount atomic.Int64 // passive
 
 	active atomic.Int64
-
 	weight int
+
+	cb *cb.CircuitBreaker
 }
 
 func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error) {
@@ -61,6 +63,7 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 	backend := &Backend{
 		URL:    u,
 		weight: weight,
+		cb:     cb.NewCircuitBreaker(),
 	}
 
 	backend.Alive.Store(true)
@@ -80,16 +83,22 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			backend.RecordFailure(maxFailCount)
+			backend.cb.Record(true)
+
 			w.WriteHeader(http.StatusBadGateway)
 		},
 
 		ModifyResponse: func(r *http.Response) error {
-			switch {
-			case r.StatusCode >= 500:
+			failure := r.StatusCode >= 500
+
+			if failure {
 				backend.RecordFailure(maxFailCount)
-			default:
+			} else {
 				backend.RecordSuccess()
 			}
+
+			backend.cb.Record(failure)
+
 			return nil
 		},
 	}
@@ -100,38 +109,32 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 }
 
 func (b *Backend) RecordSuccess() {
-	b.successCount.Add(1)
-
 	if b.failCount.Load() > 0 {
 		b.failCount.Add(-1)
-	}
-
-	if b.failCount.Load() == 0 && !b.Alive.Load() {
-		b.Alive.Store(true)
-		b.State.Store(int32(Healthy))
 	}
 }
 
 func (b *Backend) RecordFailure(maxFailCount int64) {
 	currentFailures := b.failCount.Load()
 
-	b.successCount.Store(0)
-
 	if currentFailures >= maxFailCount {
 		b.Alive.Store(false)
-		b.State.Store(int32(Unhealthy))
+		//	b.State.Store(int32(Unhealthy))
 	}
 }
 
 func (b *Backend) UpdateActiveStatus(isUp bool) {
 	b.Alive.Store(isUp)
 
-	if isUp {
-		b.State.Store(int32(Healthy))
-		b.failCount.Store(0)
-	} else {
-		b.State.Store(int32(Unhealthy))
-	}
+	// if isUp {
+	// 	b.State.Store(int32(Healthy))
+	// } else {
+	// 	b.State.Store(int32(Unhealthy))
+	// }
+}
+
+func (b *Backend) CanPass() bool {
+	return b.IsAlive() && b.cb.CanPass()
 }
 
 func (b *Backend) IsAlive() bool {
@@ -139,7 +142,7 @@ func (b *Backend) IsAlive() bool {
 }
 
 func (b *Backend) IncrementFailCount() {
-	b.failCount.And(1)
+	b.failCount.Add(1)
 }
 
 func (b *Backend) IncrementActive() int64 {

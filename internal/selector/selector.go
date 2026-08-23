@@ -1,14 +1,17 @@
 package selector
 
 import (
+	"hash/fnv"
 	"math/rand"
+	"sort"
+	"strconv"
 	"sync"
 
 	"github.com/lb/internal/backend"
 )
 
 type Selector interface {
-	Choose(backends []*backend.Backend) *backend.Backend
+	Choose(backends []*backend.Backend, key string) *backend.Backend
 }
 
 type RoundRobinSelector struct {
@@ -20,7 +23,24 @@ type PowerOfTwoSelector struct {
 	mu sync.Mutex
 }
 
-func (sl *RoundRobinSelector) Choose(backends []*backend.Backend) *backend.Backend {
+type HashSelector struct {
+}
+
+type ConsistentHashSelector struct {
+	hashes []uint32
+	nodes  map[uint32]*backend.Backend
+
+	virtualNodes int
+}
+
+func NewConsistentHashSelector(virtualNodes int) *ConsistentHashSelector {
+	return &ConsistentHashSelector{
+		nodes:        map[uint32]*backend.Backend{},
+		virtualNodes: virtualNodes,
+	}
+}
+
+func (sl *RoundRobinSelector) Choose(backends []*backend.Backend, key string) *backend.Backend {
 	sl.mu.Lock()
 	defer sl.mu.Unlock()
 
@@ -43,7 +63,7 @@ func (sl *RoundRobinSelector) Choose(backends []*backend.Backend) *backend.Backe
 	return nil
 }
 
-func (sl *PowerOfTwoSelector) Choose(backends []*backend.Backend) *backend.Backend {
+func (sl *PowerOfTwoSelector) Choose(backends []*backend.Backend, key string) *backend.Backend {
 	i := rand.Intn(len(backends))
 	j := rand.Intn(len(backends))
 
@@ -59,4 +79,62 @@ func (sl *PowerOfTwoSelector) Choose(backends []*backend.Backend) *backend.Backe
 	}
 
 	return b2
+}
+
+func (sl *HashSelector) Choose(backends []*backend.Backend, key string) *backend.Backend {
+	hash := fnv.New64a()
+	hash.Write([]byte(key))
+
+	idx := hash.Sum64() % uint64(len(backends))
+
+	return backends[idx]
+}
+
+func (sl *ConsistentHashSelector) Update(backends []*backend.Backend) {
+	hashes := make([]uint32, 0, len(backends)*sl.virtualNodes)
+	nodes := make(map[uint32]*backend.Backend)
+
+	for _, b := range backends {
+		if !b.IsAlive() {
+			continue
+		}
+
+		for i := 0; i < sl.virtualNodes; i++ {
+			hash := hashKey(
+				b.URL.String() + "#" + strconv.Itoa(i),
+			)
+
+			hashes = append(hashes, hash)
+			nodes[hash] = b
+		}
+	}
+
+	sort.Slice(hashes, func(i, j int) bool {
+		return hashes[i] < hashes[j]
+	})
+
+	sl.hashes = hashes
+	sl.nodes = nodes
+}
+
+func (sl *ConsistentHashSelector) Choose(backends []*backend.Backend, key string) *backend.Backend {
+	if len(sl.hashes) == 0 {
+		return nil
+	}
+
+	hash := hashKey(key)
+
+	idx := sort.Search(len(sl.hashes), func(i int) bool { return sl.hashes[i] >= hash })
+
+	if idx == len(sl.hashes) {
+		idx = 0
+	}
+
+	return sl.nodes[sl.hashes[idx]]
+}
+
+func hashKey(key string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	return h.Sum32()
 }

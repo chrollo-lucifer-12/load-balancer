@@ -71,7 +71,7 @@ func (lb *LoadBalancer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	attempts := 3
 
 	for i := 1; i <= attempts; i++ {
-		backend := lb.sl.Choose(lb.backends)
+		backend := lb.sl.Choose(lb.backends, r.RemoteAddr)
 		if backend == nil {
 			http.Error(w, "No available backends", http.StatusServiceUnavailable)
 			return

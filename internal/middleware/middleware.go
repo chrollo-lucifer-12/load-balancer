@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lb/internal/metrics"
+	"github.com/lb/internal/rl"
 	"github.com/lb/internal/rw"
 )
 
@@ -49,6 +50,18 @@ func Logger(next http.Handler) http.Handler {
 				rw.Status,
 				time.Since(start),
 			)
+		}
+	})
+}
+
+func RateLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		keyIP := r.RemoteAddr
+
+		if rl.Rl.Allow(keyIP) {
+			next.ServeHTTP(w, r)
+		} else {
+			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 		}
 	})
 }

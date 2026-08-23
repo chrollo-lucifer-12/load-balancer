@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/lb/internal/cb"
-	"github.com/lb/internal/metrics"
+	"github.com/lb/internal/window"
 )
 
 type BackendState int32
@@ -46,7 +46,7 @@ type Backend struct {
 
 	ReverseProxy *httputil.ReverseProxy
 
-	passive *metrics.RollingWindow
+	passive *window.RollingWindow
 
 	active atomic.Int64
 	weight int
@@ -64,7 +64,7 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 		URL:     u,
 		weight:  weight,
 		cb:      cb.NewCircuitBreaker(),
-		passive: metrics.NewRollingWindow(30),
+		passive: window.NewRollingWindow(30),
 	}
 
 	backend.Alive.Store(true)

@@ -1,4 +1,4 @@
-package metrics
+package window
 
 import (
 	"sync"
@@ -173,13 +173,13 @@ func TestRollingWindow_Cleanup(t *testing.T) {
 	now := time.Now().Unix()
 
 	// Expired bucket.
-	rw.buckets[now-3] = &MetricsBucket{
+	rw.buckets[now-3] = &Bucket{
 		Total:  10,
 		Failed: 5,
 	}
 
 	// Still valid bucket.
-	rw.buckets[now-1] = &MetricsBucket{
+	rw.buckets[now-1] = &Bucket{
 		Total:  4,
 		Failed: 2,
 	}

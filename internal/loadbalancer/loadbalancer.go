@@ -1,14 +1,14 @@
 package loadbalancer
 
 import (
-	"context"
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/lb/internal/backend"
 	"github.com/lb/internal/config"
+	"github.com/lb/internal/middleware"
+	"github.com/lb/internal/rw"
 )
 
 type Strategy int
@@ -29,6 +29,8 @@ type LoadBalancer struct {
 	maxFailCount int64
 
 	strategy Strategy
+
+	mux http.Handler
 }
 
 func NewLoadBalancer(backendConfigs []config.BackendConfig, healthCheckInterval time.Duration, maxFailCount int64, strategy Strategy) *LoadBalancer {
@@ -51,20 +53,26 @@ func NewLoadBalancer(backendConfigs []config.BackendConfig, healthCheckInterval 
 		strategy:            strategy,
 	}
 
+	mux := http.NewServeMux()
+
+	handler := middleware.Chain(middleware.Recover, middleware.Buffer, middleware.Metric, middleware.Logger)(http.HandlerFunc(lb.serveHTTP))
+
+	mux.Handle("/", handler)
+
+	lb.mux = mux
+
 	go lb.healthCheck()
 
 	return lb
 }
 
-func (lb *LoadBalancer) ServerHTTP(w http.ResponseWriter, r *http.Request) {
+func (lb *LoadBalancer) Run(w http.ResponseWriter, r *http.Request) {
+	lb.mux.ServeHTTP(w, r)
+}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	r = r.WithContext(ctx)
+func (lb *LoadBalancer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 	attempts := 3
-
-	rec := NewResponseBuffer(w)
 
 	for i := 1; i <= attempts; i++ {
 		backend := lb.chooseBackend()
@@ -75,18 +83,17 @@ func (lb *LoadBalancer) ServerHTTP(w http.ResponseWriter, r *http.Request) {
 
 		backend.IncrementActive()
 
-		log.Printf("forwarding request to: %s", backend.URL)
+		backend.ServeHTTP(w, r)
 
-		backend.ServeHTTP(rec, r)
+		rec := w.(*rw.ResponseWrapper)
 
 		backend.DecrementActive()
 
-		if rec.status >= 500 && isIdempotent(r) {
+		if rec.Status >= 500 && isIdempotent(r) {
 			rec.Reset()
 			continue
 		}
 
-		rec.Flush()
 		return
 	}
 

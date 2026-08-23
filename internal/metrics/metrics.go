@@ -1,88 +1,21 @@
 package metrics
 
-import (
-	"sync"
-	"time"
-)
+import "sync/atomic"
 
-type MetricsBucket struct {
-	Total  int64
-	Failed int64
+var MetricsRecord *Metrics
+
+type Metrics struct {
+	RequestsTotal    atomic.Int64
+	RequestsInFlight atomic.Int64
+	RequestsFailed   atomic.Int64
 }
 
-type RollingWindow struct {
-	mu         sync.Mutex
-	buckets    map[int64]*MetricsBucket
-	windowSize int64
-}
+func NewMetrics() {
+	m := Metrics{}
 
-func NewRollingWindow(windowSizeSeconds int64) *RollingWindow {
-	return &RollingWindow{
-		buckets:    make(map[int64]*MetricsBucket),
-		windowSize: windowSizeSeconds,
-	}
-}
+	m.RequestsTotal.Store(0)
+	m.RequestsFailed.Store(0)
+	m.RequestsInFlight.Store(0)
 
-func (rw *RollingWindow) FailureCount() int64 {
-	rw.mu.Lock()
-	defer rw.mu.Unlock()
-
-	now := time.Now().Unix()
-	rw.cleanup(now)
-
-	var failed int64
-
-	for _, bucket := range rw.buckets {
-		failed += bucket.Failed
-	}
-
-	return failed
-}
-
-func (rw *RollingWindow) Record(isFailure bool) {
-	rw.mu.Lock()
-	defer rw.mu.Unlock()
-
-	now := time.Now().Unix()
-	rw.cleanup(now)
-
-	if _, exists := rw.buckets[now]; !exists {
-		rw.buckets[now] = &MetricsBucket{}
-	}
-
-	rw.buckets[now].Total++
-	if isFailure {
-		rw.buckets[now].Failed++
-	}
-}
-
-func (rw *RollingWindow) ErrorRate() (float64, int64) {
-	rw.mu.Lock()
-	defer rw.mu.Unlock()
-
-	now := time.Now().Unix()
-	rw.cleanup(now)
-
-	var total, failed int64
-
-	for _, bucket := range rw.buckets {
-		total += bucket.Total
-		failed += bucket.Failed
-	}
-
-	if total == 0 {
-		return 0.00, 0
-	}
-
-	return float64(failed) / float64(total), total
-}
-
-func (rw *RollingWindow) cleanup(now int64) {
-	boundary := now - rw.windowSize
-
-	for timestamp := range rw.buckets {
-		if timestamp <= boundary {
-			delete(rw.buckets, timestamp)
-		}
-	}
+	MetricsRecord = &m
 }

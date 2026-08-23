@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lb/internal/metrics"
+	"github.com/lb/internal/window"
 )
 
 type CBState int
@@ -21,7 +21,7 @@ type CircuitBreaker struct {
 	state        CBState
 	lastFailedAt time.Time
 
-	metrics *metrics.RollingWindow
+	metrics *window.RollingWindow
 
 	halfOpenSuccessCount int64
 
@@ -34,7 +34,7 @@ type CircuitBreaker struct {
 func NewCircuitBreaker() *CircuitBreaker {
 	return &CircuitBreaker{
 		state:               StateClosed,
-		metrics:             metrics.NewRollingWindow(10),
+		metrics:             window.NewRollingWindow(10),
 		halfOpenMaxRequests: 10,
 		errorThreshold:      0.5,
 		timeout:             10 * time.Second,

@@ -54,16 +54,18 @@ func Logger(next http.Handler) http.Handler {
 	})
 }
 
-func RateLimit(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		keyIP := r.RemoteAddr
+func RateLimit(limiter rl.RateLimiter) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			keyIP := r.RemoteAddr
 
-		if rl.Rl.Allow(keyIP) {
-			next.ServeHTTP(w, r)
-		} else {
-			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-		}
-	})
+			if limiter.Allow(keyIP) {
+				next.ServeHTTP(w, r)
+			} else {
+				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			}
+		})
+	}
 }
 
 func Metric(next http.Handler) http.Handler {

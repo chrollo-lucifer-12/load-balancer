@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-var Rl *RateLimiter
+var Rl RateLimiter
 
 type TokenBukcet struct {
 	tokens int64
@@ -13,7 +13,7 @@ type TokenBukcet struct {
 	lastRefill time.Time
 }
 
-type RateLimiter struct {
+type TokenBucketLimiter struct {
 	rate     int64
 	capacity int64
 
@@ -21,14 +21,18 @@ type RateLimiter struct {
 	buckets map[string]*TokenBukcet
 }
 
-func NewRateLimiter(rate, tokens, capacity int64) {
-	Rl = &RateLimiter{
+type RateLimiter interface {
+	Allow(key string) bool
+}
+
+func NewTokenBucketLimiter(rate, capacity int64) *TokenBucketLimiter {
+	return &TokenBucketLimiter{
 		rate:     rate,
-		capacity: tokens,
+		capacity: capacity,
 	}
 }
 
-func (rl *RateLimiter) Allow(key string) bool {
+func (rl *TokenBucketLimiter) Allow(key string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 

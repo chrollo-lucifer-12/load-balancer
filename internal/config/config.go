@@ -7,8 +7,13 @@ import (
 )
 
 type Config struct {
-	Server       ServerConfig  `yaml:"server"`
-	VirtualHosts []VirtualHost `yaml:"virtual_hosts"`
+	Server       ServerConfig      `yaml:"server"`
+	RateLimiter  RateLimiterConfig `yaml:"rate_limiter"`
+	VirtualHosts []VirtualHost     `yaml:"virtual_hosts"`
+}
+
+type RateLimiterConfig struct {
+	Name string `yaml:"name"`
 }
 
 type VirtualHost struct {

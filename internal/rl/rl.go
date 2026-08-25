@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+type RateLimiterType string
+
+const (
+	TokenBucket RateLimiterType = "token_bucket"
+)
+
 var Rl RateLimiter
 
 type TokenBukcet struct {

@@ -28,33 +28,42 @@ func isBackendAlive(u *url.URL) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
+func (vh *VHost) checkBackends() {
+	var wg sync.WaitGroup
+
+	for _, b := range vh.backends {
+		if b == nil || b.URL == nil {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(b *backend.Backend) {
+			defer wg.Done()
+
+			alive := isBackendAlive(b.URL)
+
+			log.Printf(
+				"health update for %s: alive=%t",
+				b.URL,
+				alive,
+			)
+
+			b.UpdateActiveStatus(alive)
+		}(b)
+	}
+
+	wg.Wait()
+	log.Println("health check completed")
+}
+
 func (vh *VHost) healthCheck() {
+	vh.checkBackends()
+
 	ticker := time.NewTicker(vh.healthCheckInterval)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			log.Println("starting health check")
-
-			var wg sync.WaitGroup
-
-			for _, b := range vh.backends {
-				wg.Add(1)
-
-				go func(b *backend.Backend) {
-					defer wg.Done()
-
-					alive := isBackendAlive(b.URL)
-
-					b.UpdateActiveStatus(alive)
-				}(b)
-			}
-
-			wg.Wait()
-			log.Println("health check completed")
-		default:
-			continue
-		}
+	for range ticker.C {
+		vh.checkBackends()
 	}
 }

@@ -1,6 +1,7 @@
 package loadbalancer
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/lb/internal/config"
@@ -45,6 +46,11 @@ func (lb *LoadBalancer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	host := r.Host
 
 	vhost := lb.vhosts[host]
+
+	if vhost == nil {
+		log.Printf("no vhost found for :%s", host)
+		return
+	}
 
 	attempts := 3
 

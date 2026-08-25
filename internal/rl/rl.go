@@ -44,6 +44,7 @@ func NewTokenBucketLimiter(rate, capacity int64) *TokenBucketLimiter {
 	return &TokenBucketLimiter{
 		rate:     rate,
 		capacity: capacity,
+		buckets:  make(map[string]*TokenBukcet),
 	}
 }
 
@@ -61,9 +62,16 @@ func (rl *TokenBucketLimiter) Allow(key string) bool {
 		rl.buckets[key] = tb
 	}
 
-	tb.tokens = min(rl.capacity, int64(time.Since(tb.lastRefill)/time.Second)*rl.rate)
+	now := time.Now()
 
-	tb.lastRefill = time.Now()
+	elapsed := now.Sub(tb.lastRefill)
+
+	newTokens := int64(elapsed/time.Second) * rl.rate
+
+	if newTokens > 0 {
+		tb.tokens = min(rl.capacity, tb.tokens+newTokens)
+		tb.lastRefill = now
+	}
 
 	if tb.tokens <= 0 {
 		return false

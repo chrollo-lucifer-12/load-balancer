@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -57,7 +58,7 @@ type Backend struct {
 func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new backend :%s %w", rawURL, err)
 	}
 
 	backend := &Backend{

@@ -105,15 +105,13 @@ func (cb *CircuitBreaker) handleClosedState() {
 
 }
 
-func (cb *CircuitBreaker) handleHalfOpenState() error {
+func (cb *CircuitBreaker) handleHalfOpenState() {
 
 	cb.halfOpenSuccessCount++
 
 	if cb.halfOpenSuccessCount >= cb.halfOpenMaxRequests {
 		cb.resetCircuit()
 	}
-
-	return nil
 }
 
 func (cb *CircuitBreaker) resetCircuit() {

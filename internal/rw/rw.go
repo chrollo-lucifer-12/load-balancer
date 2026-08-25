@@ -1,6 +1,9 @@
 package rw
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+)
 
 type ResponseWrapper struct {
 	w         http.ResponseWriter
@@ -48,7 +51,7 @@ func (r *ResponseWrapper) Flush() error {
 
 	_, err := r.w.Write(r.buf)
 	if err != nil {
-		return err
+		return fmt.Errorf("rw flush %w", err)
 	}
 
 	r.Reset()

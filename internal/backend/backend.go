@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -15,13 +16,39 @@ import (
 
 type BackendState int32
 
+const bufferSize = 32 * 1024
+
+type bufferPool struct {
+	pool sync.Pool
+}
+
+func newBufferPool() *bufferPool {
+	b := &bufferPool{
+		pool: sync.Pool{},
+	}
+
+	b.pool.New = func() any {
+		return make([]byte, bufferSize)
+	}
+
+	return b
+}
+
+func (b *bufferPool) Get() []byte {
+	return b.pool.Get().([]byte)
+}
+
+func (b *bufferPool) Put(bytes []byte) {
+	b.pool.Put(bytes)
+}
+
 const (
 	Healthy BackendState = iota
 	Unhealthy
 	Draining
 )
 
-var transport = &http.Transport{
+var Transport = &http.Transport{
 
 	DialContext: (&net.Dialer{
 		Timeout:   5 * time.Second,
@@ -32,10 +59,8 @@ var transport = &http.Transport{
 
 	ResponseHeaderTimeout: 10 * time.Second,
 
-	DisableKeepAlives: false,
-
 	MaxIdleConns:        100,
-	MaxIdleConnsPerHost: 100,
+	MaxIdleConnsPerHost: 20,
 	MaxConnsPerHost:     100,
 	IdleConnTimeout:     90 * time.Second,
 }
@@ -71,7 +96,8 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 	backend.Alive.Store(true)
 
 	proxy := &httputil.ReverseProxy{
-		Transport: transport,
+
+		Transport: Transport,
 
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			originalHost := pr.In.Host
@@ -99,6 +125,8 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 
 			return nil
 		},
+
+		BufferPool: newBufferPool(),
 	}
 
 	backend.ReverseProxy = proxy

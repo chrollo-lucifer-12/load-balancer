@@ -1,10 +1,6 @@
 package main
 
 import (
-	"log"
-	"net/http"
-	_ "net/http/pprof"
-
 	"github.com/lb/internal/config"
 	"github.com/lb/internal/loadbalancer"
 	"github.com/lb/internal/metrics"
@@ -13,11 +9,6 @@ import (
 )
 
 func main() {
-
-	go func() {
-		log.Println("pprof listening on :6060")
-		log.Println(http.ListenAndServe("127.0.0.1:6060", nil))
-	}()
 
 	metrics.NewMetrics()
 

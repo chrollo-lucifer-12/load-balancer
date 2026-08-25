@@ -27,7 +27,8 @@ func NewLoadBalancer(virtualHosts []config.VirtualHost, limiterType string) *Loa
 		lb.vhosts[vh.Host] = vhost.NewVHost(vh)
 	}
 
-	lb.handler = middleware.Chain(middleware.Recover,
+	lb.handler = middleware.Chain(
+		middleware.Recover,
 		middleware.Buffer,
 		middleware.Metric,
 	//	middleware.Logger,

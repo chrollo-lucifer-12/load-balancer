@@ -1,7 +1,6 @@
 package vhost
 
 import (
-	"log"
 	"net/http"
 	"net/url"
 	"sync"
@@ -43,18 +42,18 @@ func (vh *VHost) checkBackends() {
 
 			alive := isBackendAlive(b.URL)
 
-			log.Printf(
-				"health update for %s: alive=%t",
-				b.URL,
-				alive,
-			)
+			// log.Printf(
+			// 	"health update for %s: alive=%t",
+			// 	b.URL,
+			// 	alive,
+			// )
 
 			b.UpdateActiveStatus(alive)
 		}(b)
 	}
 
 	wg.Wait()
-	log.Println("health check completed")
+	// log.Println("health check completed")
 }
 
 func (vh *VHost) healthCheck() {

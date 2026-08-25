@@ -13,8 +13,9 @@ import (
 type SelectorType string
 
 const (
-	RoundRobin SelectorType = "round_robin"
-	PowerOfTwo SelectorType = "power_of_two"
+	RoundRobin        SelectorType = "round_robin"
+	PowerOfTwo        SelectorType = "power_of_two"
+	ConsistentHashing SelectorType = "consistent_hashing"
 )
 
 func NewSelector(sType SelectorType) Selector {
@@ -23,6 +24,8 @@ func NewSelector(sType SelectorType) Selector {
 		return &RoundRobinSelector{}
 	case PowerOfTwo:
 		return &PowerOfTwoSelector{}
+	case ConsistentHashing:
+		return NewConsistentHashSelector(3)
 	default:
 		return nil
 	}

@@ -32,10 +32,10 @@ var transport = &http.Transport{
 
 	ResponseHeaderTimeout: 10 * time.Second,
 
-	DisableKeepAlives: true,
+	DisableKeepAlives: false,
 
 	MaxIdleConns:        100,
-	MaxIdleConnsPerHost: 20,
+	MaxIdleConnsPerHost: 100,
 	MaxConnsPerHost:     100,
 	IdleConnTimeout:     90 * time.Second,
 }

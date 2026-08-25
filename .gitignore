@@ -33,3 +33,5 @@ go.work.sum
 
 test.yml
 public/
+caddy/
+cpu.pprof

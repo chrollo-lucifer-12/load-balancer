@@ -6,7 +6,6 @@ import (
 
 	"github.com/lb/internal/config"
 	"github.com/lb/internal/middleware"
-	"github.com/lb/internal/rl"
 	"github.com/lb/internal/rw"
 	"github.com/lb/internal/vhost"
 )
@@ -18,7 +17,7 @@ type LoadBalancer struct {
 
 func NewLoadBalancer(virtualHosts []config.VirtualHost, limiterType string) *LoadBalancer {
 
-	limiter := rl.NewRateLimiter(rl.RateLimiterType(limiterType))
+	//	limiter := rl.NewRateLimiter(rl.RateLimiterType(limiterType))
 
 	lb := &LoadBalancer{
 		vhosts: make(map[string]*vhost.VHost),
@@ -31,8 +30,8 @@ func NewLoadBalancer(virtualHosts []config.VirtualHost, limiterType string) *Loa
 	lb.handler = middleware.Chain(middleware.Recover,
 		middleware.Buffer,
 		middleware.Metric,
-		middleware.Logger,
-		middleware.RateLimit(limiter))(http.HandlerFunc(lb.serveHTTP))
+	//	middleware.Logger,
+	)(http.HandlerFunc(lb.serveHTTP))
 
 	return lb
 }

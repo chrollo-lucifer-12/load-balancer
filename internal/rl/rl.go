@@ -13,6 +13,15 @@ const (
 
 var Rl RateLimiter
 
+func NewRateLimiter(rType RateLimiterType) RateLimiter {
+	switch rType {
+	case TokenBucket:
+		return NewTokenBucketLimiter(5, 100)
+	default:
+		return nil
+	}
+}
+
 type TokenBukcet struct {
 	tokens int64
 

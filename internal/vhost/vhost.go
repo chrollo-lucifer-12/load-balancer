@@ -22,7 +22,7 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 
 	vh := &VHost{
 		sl:                  sl,
-		healthCheckInterval: time.Duration(healthCheckInterval),
+		healthCheckInterval: time.Duration(healthCheckInterval) * time.Second,
 	}
 
 	backends := make([]*backend.Backend, len(vhostConfig.Backends))

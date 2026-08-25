@@ -10,6 +10,24 @@ import (
 	"github.com/lb/internal/backend"
 )
 
+type SelectorType string
+
+const (
+	RoundRobin SelectorType = "round_robin"
+	PowerOfTwo SelectorType = "power_of_two"
+)
+
+func NewSelector(sType SelectorType) Selector {
+	switch sType {
+	case RoundRobin:
+		return &RoundRobinSelector{}
+	case PowerOfTwo:
+		return &PowerOfTwoSelector{}
+	default:
+		return nil
+	}
+}
+
 type Selector interface {
 	Choose(backends []*backend.Backend, key string) *backend.Backend
 }

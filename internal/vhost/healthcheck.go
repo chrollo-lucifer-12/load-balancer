@@ -1,4 +1,4 @@
-package loadbalancer
+package vhost
 
 import (
 	"log"
@@ -28,8 +28,8 @@ func isBackendAlive(u *url.URL) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-func (lb *LoadBalancer) healthCheck() {
-	ticker := time.NewTicker(lb.healthCheckInterval)
+func (vh *VHost) healthCheck() {
+	ticker := time.NewTicker(vh.healthCheckInterval)
 	defer ticker.Stop()
 
 	for {
@@ -39,7 +39,7 @@ func (lb *LoadBalancer) healthCheck() {
 
 			var wg sync.WaitGroup
 
-			for _, b := range lb.backends {
+			for _, b := range vh.backends {
 				wg.Add(1)
 
 				go func(b *backend.Backend) {

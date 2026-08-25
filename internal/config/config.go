@@ -7,19 +7,20 @@ import (
 )
 
 type Config struct {
-	Server       ServerConfig       `yaml:"server"`
-	LoadBalancer LoadBalancerConfig `yaml:"load_balancer"`
-	Backends     []BackendConfig    `yaml:"backends"`
+	Server       ServerConfig  `yaml:"server"`
+	VirtualHosts []VirtualHost `yaml:"virtual_hosts"`
+}
+
+type VirtualHost struct {
+	Host        string            `yaml:"host"`
+	Backends    []BackendConfig   `yaml:"backends"`
+	Strategy    string            `yaml:"strategy"`
+	HealthCheck HealthCheckConfig `yaml:"health_check"`
 }
 
 type ServerConfig struct {
 	Host string `yaml:"host"`
 	Port string `yaml:"port"`
-}
-
-type LoadBalancerConfig struct {
-	Strategy    string            `yaml:"strategy"`
-	HealthCheck HealthCheckConfig `yaml:"health_check"`
 }
 
 type HealthCheckConfig struct {

@@ -13,16 +13,6 @@ import (
 
 type Middleware func(http.Handler) http.Handler
 
-func Buffer(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rec := rw.NewResponseWrapper(w)
-
-		next.ServeHTTP(rec, r)
-
-		rec.Flush()
-	})
-}
-
 func Recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

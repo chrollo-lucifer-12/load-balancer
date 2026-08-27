@@ -36,7 +36,7 @@ func main() {
 		cfg.Server.Port,
 		lb,
 		fs,
-		middleware.Buffer,
+		//	middleware.Logger,
 		middleware.Recover,
 		middleware.RateLimit(ratelimiter),
 		middleware.Metric,

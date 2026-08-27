@@ -59,7 +59,9 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 }
 
 func (vh *VHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	vh.handler.ServeHTTP(w, r)
+	rec := rw.NewResponseWrapper(w)
+	vh.handler.ServeHTTP(rec, r)
+	rec.Flush()
 }
 
 func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {

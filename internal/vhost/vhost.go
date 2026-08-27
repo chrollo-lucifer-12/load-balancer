@@ -47,6 +47,8 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 
 	var handler http.Handler = http.HandlerFunc(vh.serve)
 
+	handler = middleware.Logger(handler)
+
 	cb := circuitbreaker.NewCircuitBreaker()
 
 	handler = middleware.NewCircuitBreakerMiddleware(cb, handler)

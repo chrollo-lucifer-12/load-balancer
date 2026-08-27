@@ -3,7 +3,10 @@ package main
 import (
 	"github.com/lb/internal/config"
 	"github.com/lb/internal/loadbalancer"
-	"github.com/lb/internal/metrics"
+	"github.com/lb/internal/middleware"
+	"github.com/lb/pkg/metrics"
+	"github.com/lb/pkg/ratelimiter"
+
 	"github.com/lb/internal/server"
 	"github.com/lb/internal/static"
 )
@@ -25,12 +28,17 @@ func main() {
 
 	lb := loadbalancer.NewLoadBalancer(
 		cfg.VirtualHosts,
-		cfg.RateLimiter.Name,
 	)
+
+	ratelimiter := ratelimiter.NewRateLimiter(ratelimiter.RateLimiterType(cfg.RateLimiter.Name))
 
 	server.Start(
 		cfg.Server.Port,
 		lb,
 		fs,
+		middleware.Buffer,
+		middleware.Recover,
+		middleware.RateLimit(ratelimiter),
+		middleware.Metric,
 	)
 }

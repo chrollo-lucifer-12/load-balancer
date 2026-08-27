@@ -6,19 +6,19 @@ import (
 
 	"github.com/lb/internal/backend"
 	"github.com/lb/internal/config"
+	"github.com/lb/internal/middleware"
 	"github.com/lb/internal/rw"
 	"github.com/lb/internal/selector"
 	"github.com/lb/pkg/circuitbreaker"
 )
 
 type VHost struct {
-	backends []*backend.Backend
+	handler http.Handler
 
-	sl selector.Selector
+	backends []*backend.Backend
+	sl       selector.Selector
 
 	healthCheckInterval time.Duration
-
-	cb *circuitbreaker.CircuitBreaker
 }
 
 func NewVHost(vhostConfig config.VirtualHost) *VHost {
@@ -29,7 +29,6 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 
 	vh := &VHost{
 		sl:                  sl,
-		cb:                  circuitbreaker.NewCircuitBreaker(),
 		healthCheckInterval: time.Duration(healthCheckInterval) * time.Second,
 	}
 
@@ -46,17 +45,24 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 
 	vh.backends = backends
 
+	var handler http.Handler = http.HandlerFunc(vh.serve)
+
+	cb := circuitbreaker.NewCircuitBreaker()
+
+	handler = middleware.NewCircuitBreakerMiddleware(cb, handler)
+
+	vh.handler = handler
+
 	go vh.healthCheck()
 
 	return vh
 }
 
 func (vh *VHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	vh.handler.ServeHTTP(w, r)
+}
 
-	if !vh.cb.CanPass() {
-		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
-		return
-	}
+func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 
 	attempts := 3
 
@@ -67,31 +73,24 @@ func (vh *VHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		rec := w.(*rw.ResponseWrapper)
+
 		backend.IncrementActive()
 
-		backend.ServeHTTP(w, r)
-
-		rec := w.(*rw.ResponseWrapper)
+		backend.ServeHTTP(rec, r)
 
 		backend.DecrementActive()
 
-		reqFailed := rec.Status >= 500
+		failed := rec.Status >= 500
 
-		if !reqFailed {
-			vh.cb.OnSuccess()
-		}
-
-		if reqFailed && isIdempotent(r) {
+		if failed && isIdempotent(r) && i < attempts {
 			rec.Reset()
 			continue
 		}
 
-		vh.cb.OnFailure()
 		return
 	}
 
-	vh.cb.OnFailure()
-	http.Error(w, "All backend retry attempts failed", http.StatusBadGateway)
 }
 
 func isIdempotent(r *http.Request) bool {

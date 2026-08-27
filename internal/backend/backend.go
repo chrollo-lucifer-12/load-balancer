@@ -6,41 +6,13 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/lb/internal/cb"
 	"github.com/lb/internal/window"
 )
 
 type BackendState int32
-
-const bufferSize = 32 * 1024
-
-type bufferPool struct {
-	pool sync.Pool
-}
-
-func newBufferPool() *bufferPool {
-	b := &bufferPool{
-		pool: sync.Pool{},
-	}
-
-	b.pool.New = func() any {
-		return make([]byte, bufferSize)
-	}
-
-	return b
-}
-
-func (b *bufferPool) Get() []byte {
-	return b.pool.Get().([]byte)
-}
-
-func (b *bufferPool) Put(bytes []byte) {
-	b.pool.Put(bytes)
-}
 
 const (
 	Healthy BackendState = iota
@@ -76,8 +48,6 @@ type Backend struct {
 
 	active atomic.Int64
 	weight int
-
-	cb *cb.CircuitBreaker
 }
 
 func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error) {
@@ -89,7 +59,6 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 	backend := &Backend{
 		URL:     u,
 		weight:  weight,
-		cb:      cb.NewCircuitBreaker(),
 		passive: window.NewRollingWindow(30),
 	}
 
@@ -159,7 +128,7 @@ func (b *Backend) IsAlive() bool {
 }
 
 func (b *Backend) CanPass() bool {
-	return b.Alive.Load() && b.cb.CanPass()
+	return b.Alive.Load()
 }
 
 func (b *Backend) IncrementActive() int64 {

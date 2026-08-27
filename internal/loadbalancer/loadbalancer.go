@@ -6,7 +6,6 @@ import (
 
 	"github.com/lb/internal/config"
 	"github.com/lb/internal/middleware"
-	"github.com/lb/internal/rw"
 	"github.com/lb/internal/vhost"
 )
 
@@ -52,34 +51,5 @@ func (lb *LoadBalancer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	attempts := 3
-
-	for i := 1; i <= attempts; i++ {
-		backend := vhost.Choose(r.RemoteAddr)
-		if backend == nil {
-			http.Error(w, "No available backends", http.StatusServiceUnavailable)
-			return
-		}
-
-		backend.IncrementActive()
-
-		backend.ServeHTTP(w, r)
-
-		rec := w.(*rw.ResponseWrapper)
-
-		backend.DecrementActive()
-
-		if rec.Status >= 500 && isIdempotent(r) {
-			rec.Reset()
-			continue
-		}
-
-		return
-	}
-
-	http.Error(w, "All backend retry attempts failed", http.StatusBadGateway)
-}
-
-func isIdempotent(r *http.Request) bool {
-	return r.Method == "GET" || r.Method == "HEAD" || r.Method == "PUT" || r.Method == "DELETE"
+	vhost.ServeHTTP(w, r)
 }

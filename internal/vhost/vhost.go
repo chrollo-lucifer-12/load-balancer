@@ -1,19 +1,24 @@
 package vhost
 
 import (
-	"fmt"
-
+	"net/http"
 	"time"
 
 	"github.com/lb/internal/backend"
+	"github.com/lb/internal/cb"
 	"github.com/lb/internal/config"
+	"github.com/lb/internal/rw"
 	"github.com/lb/internal/selector"
 )
 
 type VHost struct {
-	backends            []*backend.Backend
-	sl                  selector.Selector
+	backends []*backend.Backend
+
+	sl selector.Selector
+
 	healthCheckInterval time.Duration
+
+	cb *cb.CircuitBreaker
 }
 
 func NewVHost(vhostConfig config.VirtualHost) *VHost {
@@ -24,6 +29,7 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 
 	vh := &VHost{
 		sl:                  sl,
+		cb:                  cb.NewCircuitBreaker(),
 		healthCheckInterval: time.Duration(healthCheckInterval) * time.Second,
 	}
 
@@ -32,7 +38,6 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 	for i, backendConfig := range vhostConfig.Backends {
 		backend, err := backend.NewBackend(backendConfig.URL, backendConfig.Weight, int64(maxFailCount))
 		if err != nil {
-			fmt.Errorf("new backend err :%w", err)
 			return nil
 		}
 
@@ -46,6 +51,53 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 	return vh
 }
 
-func (vh *VHost) Choose(key string) *backend.Backend {
+func (vh *VHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+	if !vh.cb.CanPass() {
+		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	attempts := 3
+
+	for i := 1; i <= attempts; i++ {
+		backend := vh.choose(r.RemoteAddr)
+		if backend == nil {
+			http.Error(w, "No available backends", http.StatusServiceUnavailable)
+			return
+		}
+
+		backend.IncrementActive()
+
+		backend.ServeHTTP(w, r)
+
+		rec := w.(*rw.ResponseWrapper)
+
+		backend.DecrementActive()
+
+		reqFailed := rec.Status >= 500
+
+		if !reqFailed {
+			vh.cb.OnSuccess()
+		}
+
+		if reqFailed && isIdempotent(r) {
+			rec.Reset()
+			continue
+		}
+
+		vh.cb.OnFailure()
+		return
+	}
+
+	vh.cb.OnFailure()
+	http.Error(w, "All backend retry attempts failed", http.StatusBadGateway)
+}
+
+func isIdempotent(r *http.Request) bool {
+	return r.Method == "GET" || r.Method == "HEAD" || r.Method == "PUT" || r.Method == "DELETE"
+}
+
+func (vh *VHost) choose(key string) *backend.Backend {
 	return vh.sl.Choose(vh.backends, key)
 }

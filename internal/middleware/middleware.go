@@ -6,9 +6,9 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/lb/internal/metrics"
-	"github.com/lb/internal/rl"
 	"github.com/lb/internal/rw"
+	"github.com/lb/pkg/metrics"
+	"github.com/lb/pkg/ratelimiter"
 )
 
 type Middleware func(http.Handler) http.Handler
@@ -56,7 +56,7 @@ func Logger(next http.Handler) http.Handler {
 	})
 }
 
-func RateLimit(limiter rl.RateLimiter) Middleware {
+func RateLimit(limiter ratelimiter.RateLimiter) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			keyIP := r.RemoteAddr

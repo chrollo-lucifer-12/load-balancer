@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/lb/internal/backend"
-	"github.com/lb/internal/cb"
 	"github.com/lb/internal/config"
 	"github.com/lb/internal/rw"
 	"github.com/lb/internal/selector"
+	"github.com/lb/pkg/circuitbreaker"
 )
 
 type VHost struct {
@@ -18,7 +18,7 @@ type VHost struct {
 
 	healthCheckInterval time.Duration
 
-	cb *cb.CircuitBreaker
+	cb *circuitbreaker.CircuitBreaker
 }
 
 func NewVHost(vhostConfig config.VirtualHost) *VHost {
@@ -29,7 +29,7 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 
 	vh := &VHost{
 		sl:                  sl,
-		cb:                  cb.NewCircuitBreaker(),
+		cb:                  circuitbreaker.NewCircuitBreaker(),
 		healthCheckInterval: time.Duration(healthCheckInterval) * time.Second,
 	}
 

@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lb/internal/window"
+	"github.com/lb/pkg/slidingwindow"
 )
 
 type BackendState int32
@@ -44,7 +44,7 @@ type Backend struct {
 
 	ReverseProxy *httputil.ReverseProxy
 
-	passive *window.RollingWindow
+	passive *slidingwindow.RollingWindow
 
 	active atomic.Int64
 	weight int
@@ -59,7 +59,7 @@ func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error)
 	backend := &Backend{
 		URL:     u,
 		weight:  weight,
-		passive: window.NewRollingWindow(30),
+		passive: slidingwindow.NewRollingWindow(30),
 	}
 
 	backend.Alive.Store(true)

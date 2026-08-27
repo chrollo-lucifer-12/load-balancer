@@ -1,10 +1,10 @@
-package cb
+package circuitbreaker
 
 import (
 	"sync"
 	"time"
 
-	"github.com/lb/internal/window"
+	"github.com/lb/pkg/slidingwindow"
 )
 
 type CBState int
@@ -21,7 +21,7 @@ type CircuitBreaker struct {
 	state        CBState
 	lastFailedAt time.Time
 
-	metrics *window.RollingWindow
+	metrics *slidingwindow.RollingWindow
 
 	halfOpenSuccessCount int64
 
@@ -34,7 +34,7 @@ type CircuitBreaker struct {
 func NewCircuitBreaker() *CircuitBreaker {
 	return &CircuitBreaker{
 		state:               StateClosed,
-		metrics:             window.NewRollingWindow(10),
+		metrics:             slidingwindow.NewRollingWindow(10),
 		halfOpenMaxRequests: 10,
 		errorThreshold:      0.5,
 		timeout:             10 * time.Second,

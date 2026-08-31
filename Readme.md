@@ -6,3 +6,11 @@ Summary:
   Fastest:      1.2027 ms
   Average:      10.3091 ms
   Requests/sec: 4846.7465
+
+
+  Success rate: 100.00%
+  Total:        2131.8559 ms
+  Slowest:      18.7173 ms
+  Fastest:      0.1500 ms
+  Average:      1.0613 ms
+  Requests/sec: 46907.4856

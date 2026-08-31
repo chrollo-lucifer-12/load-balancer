@@ -35,3 +35,4 @@ test.yml
 public/
 caddy/
 cpu.pprof
+traefik

@@ -1,28 +1,34 @@
 package rw
 
 import (
-	"fmt"
 	"net/http"
+	"sync"
 )
 
 type ResponseWrapper struct {
-	w         http.ResponseWriter
-	HeaderMap http.Header
-	buf       []byte
-	Status    int
+	w      http.ResponseWriter
+	buf    []byte
+	Status int
+}
+
+var responseWrapperPool = sync.Pool{
+	New: func() any {
+		return &ResponseWrapper{
+			Status: http.StatusOK,
+			buf:    make([]byte, 0, 4096),
+		}
+	},
 }
 
 func NewResponseWrapper(w http.ResponseWriter) *ResponseWrapper {
-	return &ResponseWrapper{
-		w:         w,
-		HeaderMap: make(http.Header),
-		Status:    http.StatusOK,
-		buf:       make([]byte, 0, 4096),
-	}
+	r := responseWrapperPool.Get().(*ResponseWrapper)
+	r.w = w
+
+	return r
 }
 
 func (r *ResponseWrapper) Header() http.Header {
-	return r.HeaderMap
+	return r.w.Header()
 }
 
 func (r *ResponseWrapper) Write(p []byte) (int, error) {
@@ -35,25 +41,20 @@ func (r *ResponseWrapper) WriteHeader(status int) {
 }
 
 func (r *ResponseWrapper) Reset() {
-	clear(r.HeaderMap)
-
 	r.buf = r.buf[:0]
 	r.Status = http.StatusOK
 }
 
 func (r *ResponseWrapper) Flush() error {
 
-	for k, values := range r.HeaderMap {
-		r.w.Header()[k] = values
-	}
-
 	r.w.WriteHeader(r.Status)
 
 	_, err := r.w.Write(r.buf)
-	if err != nil {
-		return fmt.Errorf("rw flush %w", err)
-	}
+	return err
+}
 
+func PutResponseWrapper(r *ResponseWrapper) {
 	r.Reset()
-	return nil
+	r.w = nil
+	responseWrapperPool.Put(r)
 }

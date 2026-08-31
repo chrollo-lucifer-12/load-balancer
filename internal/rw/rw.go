@@ -2,59 +2,57 @@ package rw
 
 import (
 	"net/http"
-	"sync"
 )
 
 type ResponseWrapper struct {
-	w      http.ResponseWriter
-	buf    []byte
-	Status int
-}
+	http.ResponseWriter
 
-var responseWrapperPool = sync.Pool{
-	New: func() any {
-		return &ResponseWrapper{
-			Status: http.StatusOK,
-			buf:    make([]byte, 0, 4096),
-		}
-	},
+	Status      int
+	WroteHeader bool
+	Bytes       int64
 }
 
 func NewResponseWrapper(w http.ResponseWriter) *ResponseWrapper {
-	r := responseWrapperPool.Get().(*ResponseWrapper)
-	r.w = w
-
-	return r
-}
-
-func (r *ResponseWrapper) Header() http.Header {
-	return r.w.Header()
-}
-
-func (r *ResponseWrapper) Write(p []byte) (int, error) {
-	r.buf = append(r.buf, p...)
-	return len(p), nil
+	return &ResponseWrapper{
+		ResponseWriter: w,
+		Status:         http.StatusOK,
+	}
 }
 
 func (r *ResponseWrapper) WriteHeader(status int) {
+
+	if r.WroteHeader {
+		return
+	}
+
 	r.Status = status
+	r.WroteHeader = true
+
+	r.ResponseWriter.WriteHeader(status)
 }
 
-func (r *ResponseWrapper) Reset() {
-	r.buf = r.buf[:0]
-	r.Status = http.StatusOK
+func (r *ResponseWrapper) Write(p []byte) (int, error) {
+
+	if !r.WroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
+
+	n, err := r.ResponseWriter.Write(p)
+	r.Bytes += int64(n)
+
+	return n, err
 }
 
-func (r *ResponseWrapper) Flush() error {
+func (r *ResponseWrapper) Flush() {
+	if !r.WroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
 
-	r.w.WriteHeader(r.Status)
-
-	_, err := r.w.Write(r.buf)
-	return err
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
-func PutResponseWrapper(r *ResponseWrapper) {
-	r.Reset()
-	r.w = nil
-	responseWrapperPool.Put(r)
+func (r *ResponseWrapper) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
 }

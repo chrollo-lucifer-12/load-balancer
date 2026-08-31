@@ -63,9 +63,6 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 func (vh *VHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rec := rw.NewResponseWrapper(w)
 	vh.handler.ServeHTTP(rec, r)
-	rec.Flush()
-
-	rw.PutResponseWrapper(rec)
 }
 
 func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +87,7 @@ func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 		failed := rec.Status >= 500
 
 		if failed && isIdempotent(r) && i < attempts {
-			rec.Reset()
+			//	rec.Reset()
 			continue
 		}
 

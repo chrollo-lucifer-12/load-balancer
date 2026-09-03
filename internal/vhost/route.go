@@ -1,7 +1,6 @@
 package vhost
 
 import (
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,7 +49,6 @@ func NewRoute(routeConfig config.RouteConfig, maxFailCount int64) *Route {
 	var handler http.Handler = http.HandlerFunc(r.serve)
 
 	if routeConfig.CircuitBreaker {
-		log.Println("CB ENABLED FOR ROUTE:", routeConfig.PathPrefix)
 
 		cb := circuitbreaker.NewCircuitBreaker()
 

@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/lb/internal/rw"
@@ -22,8 +21,6 @@ func NewCircuitBreakerMiddleware(cb *circuitbreaker.CircuitBreaker, next http.Ha
 
 func (m *CircuitBreakerMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	log.Println("cb middleware")
-
 	if !m.cb.CanPass() {
 		http.Error(
 			w,
@@ -33,17 +30,13 @@ func (m *CircuitBreakerMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	log.Println("circuit breaker PASS")
-
 	rec := w.(*rw.ResponseWrapper)
 
 	m.next.ServeHTTP(rec, r)
 
 	if rec.Status >= 500 {
-		log.Println("failed")
 		m.cb.OnFailure()
 	} else {
-		log.Println("success")
 		m.cb.OnSuccess()
 	}
 }

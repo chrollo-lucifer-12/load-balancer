@@ -89,8 +89,6 @@ func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println(route.PathPrefix)
-
 	route.ServeHTTP(w, r)
 }
 

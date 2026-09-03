@@ -63,6 +63,7 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 func (vh *VHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rec := rw.NewResponseWrapper(w)
 	vh.handler.ServeHTTP(rec, r)
+
 }
 
 func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +71,7 @@ func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 	attempts := 3
 
 	for i := 1; i <= attempts; i++ {
-		backend := vh.choose(r.RemoteAddr)
+		backend := vh.choose(w, r)
 		if backend == nil {
 			http.Error(w, "No available backends", http.StatusServiceUnavailable)
 			return
@@ -87,7 +88,6 @@ func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 		failed := rec.Status >= 500
 
 		if failed && isIdempotent(r) && i < attempts {
-			//	rec.Reset()
 			continue
 		}
 
@@ -100,6 +100,6 @@ func isIdempotent(r *http.Request) bool {
 	return r.Method == "GET" || r.Method == "HEAD" || r.Method == "PUT" || r.Method == "DELETE"
 }
 
-func (vh *VHost) choose(key string) *backend.Backend {
-	return vh.sl.Choose(vh.backends, key)
+func (vh *VHost) choose(w http.ResponseWriter, r *http.Request) *backend.Backend {
+	return vh.sl.Choose(vh.backends, w, r)
 }

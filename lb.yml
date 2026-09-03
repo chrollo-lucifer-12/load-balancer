@@ -36,7 +36,7 @@ virtual_hosts:
     routes:
       - name: "api"
         path: "/api"
-        strategy: "power_of_two"
+        strategy: "round_robin"
         circuit_breaker: true
         strip: "/api"
 

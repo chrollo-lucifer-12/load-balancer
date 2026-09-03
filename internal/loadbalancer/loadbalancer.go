@@ -35,5 +35,7 @@ func (lb *LoadBalancer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Println(host)
+
 	vhost.ServeHTTP(w, r)
 }

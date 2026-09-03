@@ -101,8 +101,6 @@ func (cb *CircuitBreaker) handleClosedState() {
 		cb.lastFailedAt = time.Now()
 	}
 
-	cb.resetCircuit()
-
 }
 
 func (cb *CircuitBreaker) handleHalfOpenState() {

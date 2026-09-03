@@ -89,24 +89,9 @@ func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	attempts := 3
+	log.Println(route.PathPrefix)
 
-	for i := 1; i <= attempts; i++ {
-
-		rec := w.(*rw.ResponseWrapper)
-
-		route.ServeHTTP(rec, r)
-
-		failed := rec.Status >= 500
-
-		if failed && isIdempotent(r) && i < attempts {
-			continue
-		}
-
-		return
-	}
-
-	http.Error(w, "Request failed", http.StatusBadGateway)
+	route.ServeHTTP(w, r)
 }
 
 func (v *VHost) matchRoute(r *http.Request) *Route {

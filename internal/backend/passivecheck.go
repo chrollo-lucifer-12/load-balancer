@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/lb/internal/rw"
@@ -29,6 +30,7 @@ func (h *PassiveHealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	h.next.ServeHTTP(rec, r)
 
 	if rec.Status >= 500 {
+		log.Println("passive check failed")
 		h.backend.RecordFailure(h.maxFailCount)
 		return
 	}

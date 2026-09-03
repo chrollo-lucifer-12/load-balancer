@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"context"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -71,10 +71,14 @@ func NewProxy(u *url.URL) *httputil.ReverseProxy {
 		},
 
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			if err == context.Canceled {
-				w.WriteHeader(499)
-				return
-			}
+
+			log.Printf(
+				"proxy error backend=%s path=%s err=%v",
+				u.String(),
+				r.URL.Path,
+				err,
+			)
+
 			w.WriteHeader(http.StatusBadGateway)
 		},
 

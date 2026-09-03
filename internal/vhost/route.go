@@ -1,12 +1,15 @@
 package vhost
 
 import (
+	"log"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 
 	"github.com/lb/internal/backend"
 	"github.com/lb/internal/config"
 	"github.com/lb/internal/middleware"
+	"github.com/lb/internal/rw"
 	"github.com/lb/internal/selector"
 	"github.com/lb/pkg/circuitbreaker"
 )
@@ -47,6 +50,8 @@ func NewRoute(routeConfig config.RouteConfig, maxFailCount int64) *Route {
 	var handler http.Handler = http.HandlerFunc(r.serve)
 
 	if routeConfig.CircuitBreaker {
+		log.Println("CB ENABLED FOR ROUTE:", routeConfig.PathPrefix)
+
 		cb := circuitbreaker.NewCircuitBreaker()
 
 		handler = middleware.NewCircuitBreakerMiddleware(cb, handler)
@@ -62,32 +67,54 @@ func (rt *Route) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rt *Route) serve(w http.ResponseWriter, r *http.Request) {
-	backend := rt.choose(w, r)
+	const attempts = 3
 
-	if backend == nil {
-		http.Error(
-			w,
-			"No available backends",
-			http.StatusServiceUnavailable,
-		)
-		return
-	}
+	for i := 1; i <= attempts; i++ {
+		backend := rt.choose(w, r)
 
-	backend.IncrementActive()
-	defer backend.DecrementActive()
-
-	if rt.StripPrefix != "" {
-		r.URL.Path = strings.TrimPrefix(
-			r.URL.Path,
-			rt.StripPrefix,
-		)
-
-		if r.URL.Path == "" {
-			r.URL.Path = "/"
+		if backend == nil {
+			http.Error(
+				w,
+				"No available backends",
+				http.StatusServiceUnavailable,
+			)
+			return
 		}
-	}
 
-	backend.ServeHTTP(w, r)
+		attemptRec := httptest.NewRecorder()
+		wrapped := rw.NewResponseWrapper(attemptRec)
+
+		if rt.StripPrefix != "" {
+			r2 := r.Clone(r.Context())
+
+			r2.URL.Path = strings.TrimPrefix(
+				r2.URL.Path,
+				rt.StripPrefix,
+			)
+
+			if r2.URL.Path == "" {
+				r2.URL.Path = "/"
+			}
+
+			r = r2
+		}
+
+		backend.IncrementActive()
+		backend.ServeHTTP(wrapped, r)
+		backend.DecrementActive()
+
+		failed := wrapped.Status >= 500
+
+		if !failed || !isIdempotent(r) || i == attempts {
+			for k, vv := range attemptRec.Header() {
+				w.Header()[k] = vv
+			}
+			w.WriteHeader(wrapped.Status)
+			w.Write(attemptRec.Body.Bytes())
+			return
+		}
+
+	}
 }
 
 func (rt *Route) choose(w http.ResponseWriter, r *http.Request) *backend.Backend {

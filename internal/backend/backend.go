@@ -82,7 +82,7 @@ func (b *Backend) IncrementActive() int64 {
 }
 
 func (b *Backend) DecrementActive() int64 {
-	return b.counter.active.Add(1)
+	return b.counter.active.Add(-1)
 }
 
 func (b *Backend) ActiveCount() int64 {

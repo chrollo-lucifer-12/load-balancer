@@ -1,6 +1,9 @@
 package main
 
 import (
+	"net/http"
+	_ "net/http/pprof"
+
 	"github.com/lb/internal/config"
 	"github.com/lb/internal/loadbalancer"
 	"github.com/lb/internal/middleware"
@@ -11,6 +14,10 @@ import (
 )
 
 func main() {
+
+	go func() {
+		http.ListenAndServe(":6060", nil)
+	}()
 
 	metrics.NewMetrics()
 

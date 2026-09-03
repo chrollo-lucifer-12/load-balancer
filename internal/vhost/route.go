@@ -2,13 +2,10 @@ package vhost
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"strings"
 
 	"github.com/lb/internal/backend"
 	"github.com/lb/internal/config"
-	"github.com/lb/internal/middleware"
-	"github.com/lb/internal/rw"
 	"github.com/lb/internal/selector"
 	"github.com/lb/pkg/circuitbreaker"
 )
@@ -20,7 +17,7 @@ type Route struct {
 	StripPrefix string
 
 	selector selector.Selector
-	handler  http.Handler
+	cb       *circuitbreaker.CircuitBreaker
 }
 
 func NewRoute(routeConfig config.RouteConfig, maxFailCount int64) *Route {
@@ -46,31 +43,36 @@ func NewRoute(routeConfig config.RouteConfig, maxFailCount int64) *Route {
 
 	r.backends = backends
 
-	var handler http.Handler = http.HandlerFunc(r.serve)
-
-	if routeConfig.CircuitBreaker {
-
-		cb := circuitbreaker.NewCircuitBreaker()
-
-		handler = middleware.NewCircuitBreakerMiddleware(cb, handler)
-	}
-
-	r.handler = handler
-
 	return r
 }
 
-func (rt *Route) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rt.handler.ServeHTTP(w, r)
+func (rt *Route) ServeHTTP(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+
+	if rt.cb != nil && !rt.cb.CanPass() {
+		http.Error(
+			w,
+			"Service unavailable",
+			http.StatusServiceUnavailable,
+		)
+		return
+	}
+
+	rt.serve(w, r)
 }
 
-func (rt *Route) serve(w http.ResponseWriter, r *http.Request) {
-	const attempts = 3
+func (rt *Route) serve(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	const attempts = 1
 
-	for i := 1; i <= attempts; i++ {
-		backend := rt.choose(w, r)
+	for i := 0; i < attempts; i++ {
+		b := rt.choose(w, r)
 
-		if backend == nil {
+		if b == nil {
 			http.Error(
 				w,
 				"No available backends",
@@ -79,39 +81,34 @@ func (rt *Route) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		attemptRec := httptest.NewRecorder()
-		wrapped := rw.NewResponseWrapper(attemptRec)
-
 		if rt.StripPrefix != "" {
-			r2 := r.Clone(r.Context())
-
-			r2.URL.Path = strings.TrimPrefix(
-				r2.URL.Path,
+			r.URL.Path = strings.TrimPrefix(
+				r.URL.Path,
 				rt.StripPrefix,
 			)
 
-			if r2.URL.Path == "" {
-				r2.URL.Path = "/"
+			if r.URL.Path == "" {
+				r.URL.Path = "/"
 			}
-
-			r = r2
 		}
 
-		backend.IncrementActive()
-		backend.ServeHTTP(wrapped, r)
-		backend.DecrementActive()
+		b.ServeHTTPWithCallback(
+			w,
+			r,
+			func(status int) {
+				if rt.cb == nil {
+					return
+				}
 
-		failed := wrapped.Status >= 500
+				if status >= 500 {
+					rt.cb.OnFailure()
+				} else {
+					rt.cb.OnSuccess()
+				}
+			},
+		)
 
-		if !failed || !isIdempotent(r) || i == attempts {
-			for k, vv := range attemptRec.Header() {
-				w.Header()[k] = vv
-			}
-			w.WriteHeader(wrapped.Status)
-			w.Write(attemptRec.Body.Bytes())
-			return
-		}
-
+		return
 	}
 }
 

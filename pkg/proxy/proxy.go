@@ -6,62 +6,40 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"runtime"
-	"sync/atomic"
 	"time"
 )
 
 var (
-	transportPool []*http.Transport
-
-	poolSize int
-
-	roundRobinCounter uint64
-
 	globalBufferPool = newBufferPool()
 )
 
-func init() {
+var transport = &http.Transport{
+	DialContext: (&net.Dialer{
+		Timeout:   5 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext,
 
-	poolSize = runtime.NumCPU()
-	transportPool = make([]*http.Transport, poolSize)
+	TLSHandshakeTimeout:   5 * time.Second,
+	ResponseHeaderTimeout: 10 * time.Second,
 
-	for i := 0; i < poolSize; i++ {
-		transportPool[i] = &http.Transport{
+	ReadBufferSize:  64 * 1024,
+	WriteBufferSize: 64 * 1024,
 
-			DialContext: (&net.Dialer{
-				Timeout:   5 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
+	MaxIdleConns:        0,
+	MaxIdleConnsPerHost: 2048,
+	MaxConnsPerHost:     0,
+	IdleConnTimeout:     90 * time.Second,
 
-			TLSHandshakeTimeout:   5 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
-
-			ReadBufferSize:  64 * 1024,
-			WriteBufferSize: 64 * 1024,
-
-			MaxIdleConns:        0,
-			MaxIdleConnsPerHost: 2048,
-			MaxConnsPerHost:     0,
-			IdleConnTimeout:     90 * time.Second,
-
-			ForceAttemptHTTP2: false,
-		}
-	}
+	ForceAttemptHTTP2: false,
 }
 
-func nextTransport() *http.Transport {
-	idx := atomic.AddUint64(&roundRobinCounter, 1) % uint64(poolSize)
-	return transportPool[idx]
-}
+type ResponseObserver func(status int)
 
-func NewProxy(u *url.URL) *httputil.ReverseProxy {
-
-	selectedTransport := nextTransport()
+func NewProxy(u *url.URL, onResponse ResponseObserver) *httputil.ReverseProxy {
 
 	return &httputil.ReverseProxy{
 
-		Transport: selectedTransport,
+		Transport: transport,
 
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			originalHost := pr.In.Host
@@ -80,6 +58,14 @@ func NewProxy(u *url.URL) *httputil.ReverseProxy {
 			)
 
 			w.WriteHeader(http.StatusBadGateway)
+		},
+
+		ModifyResponse: func(r *http.Response) error {
+			if onResponse != nil {
+				onResponse(r.StatusCode)
+			}
+
+			return nil
 		},
 
 		BufferPool: globalBufferPool,

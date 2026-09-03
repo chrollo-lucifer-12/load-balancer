@@ -9,7 +9,7 @@ logging:
   output: "stdout"
 
 rate_limiter:
-  enabled: true
+  enabled: false
   type: "token_bucket"
   rate: 100
   burst: 200

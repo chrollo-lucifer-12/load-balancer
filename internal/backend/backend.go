@@ -1,8 +1,8 @@
 package backend
 
 import (
-	"fmt"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"sync/atomic"
 
@@ -21,36 +21,103 @@ type Backend struct {
 	URL     *url.URL
 	Handler http.Handler
 
+	proxy *httputil.ReverseProxy
+
 	alive atomic.Bool
 
 	counter *Counter
 
 	weight int
+
+	maxFailCount int64
 }
 
-func NewBackend(rawURL string, weight int, maxFailCount int64) (*Backend, error) {
-	u, err := url.Parse(rawURL)
+func NewBackend(
+	rawURL string,
+	weight int,
+	maxFailCount int64,
+) (*Backend, error) {
+
+	target, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("new backend :%s %w", rawURL, err)
+		return nil, err
 	}
 
-	backend := &Backend{
-		URL:    u,
-		weight: weight,
+	b := &Backend{
+		URL:          target,
+		weight:       weight,
+		maxFailCount: maxFailCount,
+		counter:      NewCounter(),
 	}
 
-	backend.alive.Store(true)
-	backend.counter = NewCounter()
+	b.alive.Store(true)
 
-	proxy := proxy.NewProxy(u)
+	b.proxy = proxy.NewProxy(
+		target,
+		func(status int) {
+			b.RecordResponse(status)
+		},
+	)
 
-	backend.Handler = NewPassiveHealthHandlder(backend, proxy, maxFailCount)
-
-	return backend, nil
+	return b, nil
 }
 
-func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	b.Handler.ServeHTTP(w, r)
+func (b *Backend) ServeHTTP(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	b.IncrementActive()
+	defer b.DecrementActive()
+
+	b.proxy.ServeHTTP(w, r)
+}
+
+func (b *Backend) ServeHTTPWithCallback(
+	w http.ResponseWriter,
+	r *http.Request,
+	onResponse func(status int),
+) {
+	b.IncrementActive()
+	defer b.DecrementActive()
+
+	p := *b.proxy
+
+	p.ModifyResponse = func(resp *http.Response) error {
+		status := resp.StatusCode
+
+		b.RecordResponse(status)
+
+		if onResponse != nil {
+			onResponse(status)
+		}
+
+		return nil
+	}
+
+	p.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		b.RecordFailure(b.maxFailCount)
+
+		if onResponse != nil {
+			onResponse(http.StatusBadGateway)
+		}
+
+		http.Error(
+			w,
+			"Bad Gateway",
+			http.StatusBadGateway,
+		)
+	}
+
+	p.ServeHTTP(w, r)
+}
+
+func (b *Backend) RecordResponse(status int) {
+	if status >= 500 {
+		b.RecordFailure(b.maxFailCount)
+		return
+	}
+
+	b.RecordSuccess()
 }
 
 func (b *Backend) RecordSuccess() {

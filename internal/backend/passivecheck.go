@@ -2,8 +2,6 @@ package backend
 
 import (
 	"net/http"
-
-	"github.com/lb/internal/rw"
 )
 
 type PassiveHealthHandler struct {
@@ -23,13 +21,8 @@ func NewPassiveHealthHandlder(backend *Backend,
 	}
 }
 
-func (h *PassiveHealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rec := w.(*rw.ResponseWrapper)
-
-	h.next.ServeHTTP(rec, r)
-
-	if rec.Status >= 500 {
-
+func (h *PassiveHealthHandler) RecordResponse(status int) {
+	if status >= 500 {
 		h.backend.RecordFailure(h.maxFailCount)
 		return
 	}

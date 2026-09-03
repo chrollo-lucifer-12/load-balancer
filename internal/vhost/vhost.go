@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/lb/internal/config"
-	"github.com/lb/internal/rw"
 	"github.com/lb/internal/selector"
 )
 
@@ -71,8 +70,7 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 }
 
 func (vh *VHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rec := rw.NewResponseWrapper(w)
-	vh.handler.ServeHTTP(rec, r)
+	vh.handler.ServeHTTP(w, r)
 }
 
 func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {

@@ -9,9 +9,9 @@ import (
 	"github.com/lb/internal/backend"
 )
 
-func isBackendAlive(u *url.URL) bool {
+func isBackendAlive(u *url.URL, timeout time.Duration) bool {
 	client := http.Client{
-		Timeout: time.Second,
+		Timeout: timeout,
 	}
 
 	healthURL := *u
@@ -43,7 +43,7 @@ func (vh *VHost) checkBackends() {
 			go func(b *backend.Backend) {
 				defer wg.Done()
 
-				alive := isBackendAlive(b.URL)
+				alive := isBackendAlive(b.URL, vh.timeout)
 
 				b.UpdateActiveStatus(alive)
 			}(b)

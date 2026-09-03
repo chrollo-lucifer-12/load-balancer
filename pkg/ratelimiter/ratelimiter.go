@@ -3,6 +3,8 @@ package ratelimiter
 import (
 	"sync"
 	"time"
+
+	"github.com/lb/internal/config"
 )
 
 type RateLimiterType string
@@ -13,10 +15,10 @@ const (
 
 var Rl RateLimiter
 
-func NewRateLimiter(rType RateLimiterType) RateLimiter {
-	switch rType {
+func NewRateLimiter(config config.RateLimiterConfig) RateLimiter {
+	switch RateLimiterType(config.Name) {
 	case TokenBucket:
-		return NewTokenBucketLimiter(5, 100)
+		return NewTokenBucketLimiter(int64(config.Rate), int64(config.Burst))
 	default:
 		return nil
 	}

@@ -1,0 +1,63 @@
+server:
+  host: "0.0.0.0"
+  port: ":8080"
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+rate_limiter:
+  type: "token_bucket"
+  rate: 100
+  burst: 200
+
+circuit_breaker:
+  enabled: true
+  failure_threshold: 0.5
+  rolling_window: "10s"
+  open_timeout: "10s"
+  half_open_requests: 5
+
+virtual_hosts:
+  - host: "example.com"
+
+    health_check:
+      enabled: true
+      path: "/health"
+      interval: "10s"
+      timeout: "5s"
+      max_failures: 3
+
+    routes:
+
+      - name: "api"
+        path: "/api"
+        strategy: "power_of_two"
+        circuit_breaker: true
+        strip: "/api"
+
+        backends:
+          - name: "api-1"
+            url: "http://localhost:9001"
+            weight: 1
+
+          - name: "api-2"
+            url: "http://localhost:9002"
+            weight: 1
+
+      - name: "admin"
+        path: "/admin"
+        method: "GET"
+        strategy: "round_robin"
+        circuit_breaker: true
+
+        backends:
+          - name: "admin-1"
+            url: "http://localhost:7001"
+            weight: 1
+
+      - name: "static"
+        path: "/static"
+        type: "static"
+        directory: "./public"

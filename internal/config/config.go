@@ -14,7 +14,9 @@ type Config struct {
 }
 
 type RateLimiterConfig struct {
-	Name string `yaml:"name"`
+	Name  string `yaml:"name"`
+	Rate  int    `yaml:"rate"`
+	Burst int    `yaml:"burst"`
 }
 
 type VirtualHost struct {

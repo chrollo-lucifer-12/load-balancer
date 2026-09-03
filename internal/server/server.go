@@ -13,7 +13,7 @@ import (
 	"github.com/lb/internal/middleware"
 )
 
-func Start(addr string, lb http.Handler, fs http.Handler, middlewares ...middleware.Middleware) {
+func Start(addr string, lb http.Handler, middlewares ...middleware.Middleware) {
 	mux := http.NewServeMux()
 
 	handler := lb
@@ -22,7 +22,6 @@ func Start(addr string, lb http.Handler, fs http.Handler, middlewares ...middlew
 
 	handler = mw(handler)
 
-	mux.Handle("/static/", fs)
 	mux.Handle("/", lb)
 
 	srv := &http.Server{

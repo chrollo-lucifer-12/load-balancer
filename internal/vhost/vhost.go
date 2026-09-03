@@ -17,7 +17,9 @@ type VHost struct {
 	routes []*Route
 	sl     selector.Selector
 
+	enabled             bool
 	healthCheckInterval time.Duration
+	timeout             time.Duration
 }
 
 func NewVHost(vhostConfig config.VirtualHost) *VHost {
@@ -26,7 +28,9 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 	healthCheckInterval := vhostConfig.HealthCheck.Interval
 
 	vh := &VHost{
+		enabled:             vhostConfig.HealthCheck.Enabled,
 		healthCheckInterval: time.Duration(healthCheckInterval) * time.Second,
+		timeout:             time.Duration(vhostConfig.HealthCheck.Timeout) * time.Second,
 	}
 
 	routes := make([]*Route, len(vhostConfig.Rules))
@@ -45,7 +49,9 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 
 	vh.handler = handler
 
-	go vh.healthCheck()
+	if vh.enabled {
+		go vh.healthCheck()
+	}
 
 	return vh
 }

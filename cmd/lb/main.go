@@ -12,7 +12,6 @@ import (
 	"github.com/lb/pkg/ratelimiter"
 
 	"github.com/lb/internal/server"
-	"github.com/lb/internal/static"
 )
 
 func main() {
@@ -27,28 +26,21 @@ func main() {
 
 	metrics.NewMetrics()
 
-	cfg, err := config.Load("test.yml")
+	cfg, err := config.Load("lb.yml")
 
 	if err != nil {
 		panic(err)
 	}
 
-	fs := static.NewStaticServer(
-		"./public",
-		"/static/",
-	)
-
 	lb := loadbalancer.NewLoadBalancer(
 		cfg.VirtualHosts,
 	)
 
-	ratelimiter := ratelimiter.NewRateLimiter(ratelimiter.RateLimiterType(cfg.RateLimiter.Name))
+	ratelimiter := ratelimiter.NewRateLimiter(cfg.RateLimiter)
 
 	server.Start(
 		cfg.Server.Port,
 		lb,
-		fs,
-
 		middleware.Recover,
 		middleware.Logger,
 		middleware.RateLimit(ratelimiter),

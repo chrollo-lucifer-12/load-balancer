@@ -3,11 +3,13 @@ server:
   port: ":8080"
 
 logging:
+  enabled: false
   level: "info"
   format: "json"
   output: "stdout"
 
 rate_limiter:
+  enabled: true
   type: "token_bucket"
   rate: 100
   burst: 200

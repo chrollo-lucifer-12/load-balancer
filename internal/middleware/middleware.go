@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"runtime/debug"
-	"time"
 
 	"github.com/lb/internal/rw"
 	"github.com/lb/pkg/metrics"
@@ -24,25 +23,6 @@ func Recover(next http.Handler) http.Handler {
 			}
 		}()
 		next.ServeHTTP(w, r)
-	})
-}
-
-func Logger(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		start := time.Now()
-
-		next.ServeHTTP(w, r)
-
-		if rw, ok := w.(*rw.ResponseWrapper); ok {
-			log.Printf(
-				"%s %s status=%d duration=%s",
-				r.Method,
-				r.URL.Path,
-				rw.Status,
-				time.Since(start),
-			)
-		}
 	})
 }
 

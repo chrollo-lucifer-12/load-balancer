@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"github.com/lb/internal/rw"
-	"github.com/lb/pkg/metrics"
 	"github.com/lb/pkg/ratelimiter"
 )
 
@@ -40,23 +38,23 @@ func RateLimit(limiter ratelimiter.RateLimiter) Middleware {
 	}
 }
 
-func Metric(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// func Metric(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		metrics.MetricsRecord.RequestsTotal.Add(1)
-		metrics.MetricsRecord.RequestsInFlight.Add(1)
+// 		metrics.MetricsRecord.RequestsTotal.Add(1)
+// 		metrics.MetricsRecord.RequestsInFlight.Add(1)
 
-		defer metrics.MetricsRecord.RequestsInFlight.Add(-1)
+// 		defer metrics.MetricsRecord.RequestsInFlight.Add(-1)
 
-		next.ServeHTTP(w, r)
+// 		next.ServeHTTP(w, r)
 
-		if rw, ok := w.(*rw.ResponseWrapper); ok {
-			if rw.Status >= 500 {
-				metrics.MetricsRecord.RequestsFailed.Add(1)
-			}
-		}
-	})
-}
+// 		if rw, ok := w.(*rw.ResponseWrapper); ok {
+// 			if rw.Status >= 500 {
+// 				metrics.MetricsRecord.RequestsFailed.Add(1)
+// 			}
+// 		}
+// 	})
+// }
 
 func Chain(middlewares ...Middleware) Middleware {
 	return func(h http.Handler) http.Handler {

@@ -45,9 +45,9 @@ virtual_hosts:
             url: "http://localhost:8081"
             weight: 1
 
-          - name: "api-2"
-            url: "http://localhost:8082"
-            weight: 1
+          # - name: "api-2"
+          #   url: "http://localhost:8082"
+          #   weight: 1
 
       - name: "admin"
         path: "/admin"

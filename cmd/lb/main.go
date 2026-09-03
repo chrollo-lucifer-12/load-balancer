@@ -37,16 +37,16 @@ func main() {
 		middleware.Recover,
 	}
 
-	if cfg.Logger.Enabled {
-		logger := middleware.NewLogger(cfg.Logger)
-		middlewares = append(middlewares, logger.Handler)
-	}
+	// if cfg.Logger.Enabled {
+	// 	logger := middleware.NewLogger(cfg.Logger)
+	// 	middlewares = append(middlewares, logger.Handler)
+	// }
 
 	if cfg.RateLimiter.Enabled {
 		middlewares = append(middlewares, middleware.RateLimit(ratelimiter))
 	}
 
-	middlewares = append(middlewares, middleware.Metric)
+	//	middlewares = append(middlewares, middleware.Metric)
 
 	server.Start(
 		cfg.Server.Port,

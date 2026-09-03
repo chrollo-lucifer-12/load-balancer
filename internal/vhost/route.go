@@ -30,15 +30,39 @@ func NewRoute(routeConfig config.RouteConfig, maxFailCount int64) *Route {
 		selector:    sl,
 	}
 
+	if routeConfig.CircuitBreaker {
+		r.cb = circuitbreaker.NewCircuitBreaker()
+	}
+
 	backends := make([]*backend.Backend, len(routeConfig.Backends))
 
 	for i, backendConfig := range routeConfig.Backends {
-		backend, err := backend.NewBackend(backendConfig.URL, backendConfig.Weight, maxFailCount)
+
+		var onResponse func(int)
+
+		if r.cb != nil {
+			onResponse = func(status int) {
+				if status >= 500 {
+					r.cb.OnFailure()
+				} else {
+					r.cb.OnSuccess()
+				}
+			}
+		}
+
+		b, err := backend.NewBackend(
+			backendConfig.URL,
+			backendConfig.Weight,
+			maxFailCount,
+			onResponse,
+		)
+
 		if err != nil {
 			return nil
 		}
 
-		backends[i] = backend
+		backends[i] = b
+
 	}
 
 	r.backends = backends
@@ -92,23 +116,8 @@ func (rt *Route) serve(
 			}
 		}
 
-		b.ServeHTTPWithCallback(
-			w,
-			r,
-			func(status int) {
-				if rt.cb == nil {
-					return
-				}
+		b.ServeHTTP(w, r)
 
-				if status >= 500 {
-					rt.cb.OnFailure()
-				} else {
-					rt.cb.OnSuccess()
-				}
-			},
-		)
-
-		return
 	}
 }
 

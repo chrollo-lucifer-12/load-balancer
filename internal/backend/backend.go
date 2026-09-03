@@ -36,6 +36,7 @@ func NewBackend(
 	rawURL string,
 	weight int,
 	maxFailCount int64,
+	onResponse func(int),
 ) (*Backend, error) {
 
 	target, err := url.Parse(rawURL)
@@ -56,6 +57,10 @@ func NewBackend(
 		target,
 		func(status int) {
 			b.RecordResponse(status)
+
+			if onResponse != nil {
+				onResponse(status)
+			}
 		},
 	)
 
@@ -70,45 +75,6 @@ func (b *Backend) ServeHTTP(
 	defer b.DecrementActive()
 
 	b.proxy.ServeHTTP(w, r)
-}
-
-func (b *Backend) ServeHTTPWithCallback(
-	w http.ResponseWriter,
-	r *http.Request,
-	onResponse func(status int),
-) {
-	b.IncrementActive()
-	defer b.DecrementActive()
-
-	p := *b.proxy
-
-	p.ModifyResponse = func(resp *http.Response) error {
-		status := resp.StatusCode
-
-		b.RecordResponse(status)
-
-		if onResponse != nil {
-			onResponse(status)
-		}
-
-		return nil
-	}
-
-	p.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		b.RecordFailure(b.maxFailCount)
-
-		if onResponse != nil {
-			onResponse(http.StatusBadGateway)
-		}
-
-		http.Error(
-			w,
-			"Bad Gateway",
-			http.StatusBadGateway,
-		)
-	}
-
-	p.ServeHTTP(w, r)
 }
 
 func (b *Backend) RecordResponse(status int) {

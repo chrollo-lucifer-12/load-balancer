@@ -42,12 +42,13 @@ type StaticConfig struct {
 }
 
 type RuleConfig struct {
-	PathPrefix  string            `yaml:"path"`
-	Method      string            `yaml:"method,omitempty"`
-	Headers     map[string]string `yaml:"headers,omitempty"`
-	Backends    []BackendConfig   `yaml:"backends,omitempty"`
-	Strategy    string            `yaml:"strategy"`
-	StripPrefix string            `yaml:"strip,omitempty"`
+	PathPrefix     string            `yaml:"path"`
+	Method         string            `yaml:"method,omitempty"`
+	Headers        map[string]string `yaml:"headers,omitempty"`
+	Backends       []BackendConfig   `yaml:"backends,omitempty"`
+	CircuitBreaker bool              `yaml:"circuit_breaker"`
+	Strategy       string            `yaml:"strategy"`
+	StripPrefix    string            `yaml:"strip,omitempty"`
 }
 
 type ServerConfig struct {

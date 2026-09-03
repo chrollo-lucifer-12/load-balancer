@@ -6,7 +6,9 @@ import (
 
 	"github.com/lb/internal/backend"
 	"github.com/lb/internal/config"
+	"github.com/lb/internal/middleware"
 	"github.com/lb/internal/selector"
+	"github.com/lb/pkg/circuitbreaker"
 )
 
 type Route struct {
@@ -15,7 +17,9 @@ type Route struct {
 	Headers     map[string]string
 	backends    []*backend.Backend
 	StripPrefix string
-	selector    selector.Selector
+
+	selector selector.Selector
+	handler  http.Handler
 }
 
 func NewRoute(routeConfig config.RuleConfig, maxFailCount int64) *Route {
@@ -42,7 +46,50 @@ func NewRoute(routeConfig config.RuleConfig, maxFailCount int64) *Route {
 
 	r.backends = backends
 
+	var handler http.Handler = http.HandlerFunc(r.serve)
+
+	if routeConfig.CircuitBreaker {
+		cb := circuitbreaker.NewCircuitBreaker()
+
+		handler = middleware.NewCircuitBreakerMiddleware(cb, handler)
+	}
+
+	r.handler = handler
+
 	return r
+}
+
+func (rt *Route) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rt.handler.ServeHTTP(w, r)
+}
+
+func (rt *Route) serve(w http.ResponseWriter, r *http.Request) {
+	backend := rt.choose(w, r)
+
+	if backend == nil {
+		http.Error(
+			w,
+			"No available backends",
+			http.StatusServiceUnavailable,
+		)
+		return
+	}
+
+	backend.IncrementActive()
+	defer backend.DecrementActive()
+
+	if rt.StripPrefix != "" {
+		r.URL.Path = strings.TrimPrefix(
+			r.URL.Path,
+			rt.StripPrefix,
+		)
+
+		if r.URL.Path == "" {
+			r.URL.Path = "/"
+		}
+	}
+
+	backend.ServeHTTP(w, r)
 }
 
 func (rt *Route) choose(w http.ResponseWriter, r *http.Request) *backend.Backend {

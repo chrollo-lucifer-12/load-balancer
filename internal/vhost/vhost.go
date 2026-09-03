@@ -6,10 +6,8 @@ import (
 	"time"
 
 	"github.com/lb/internal/config"
-	"github.com/lb/internal/middleware"
 	"github.com/lb/internal/rw"
 	"github.com/lb/internal/selector"
-	"github.com/lb/pkg/circuitbreaker"
 )
 
 type VHost struct {
@@ -55,10 +53,6 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 
 	var handler http.Handler = http.HandlerFunc(vh.serve)
 
-	cb := circuitbreaker.NewCircuitBreaker()
-
-	handler = middleware.NewCircuitBreakerMiddleware(cb, handler)
-
 	vh.handler = handler
 
 	if vh.enabled {
@@ -91,27 +85,15 @@ func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 
 	for i := 1; i <= attempts; i++ {
 
-		backend := route.choose(w, r)
-		if backend == nil {
-			http.Error(w, "No available backends", http.StatusServiceUnavailable)
-			return
-		}
-
 		rec := w.(*rw.ResponseWrapper)
 
-		backend.IncrementActive()
-
-		backend.ServeHTTP(rec, r)
-
-		backend.DecrementActive()
+		route.ServeHTTP(rec, r)
 
 		failed := rec.Status >= 500
 
 		if failed && isIdempotent(r) && i < attempts {
 			continue
 		}
-
-		return
 	}
 
 }

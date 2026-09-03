@@ -18,8 +18,8 @@ type Route struct {
 	selector    selector.Selector
 }
 
-func NewRoute(routeConfig config.RuleConfig, selectorStrategy selector.SelectorType, maxFailCount int64) *Route {
-	sl := selector.NewSelector(selector.SelectorType(selectorStrategy))
+func NewRoute(routeConfig config.RuleConfig, maxFailCount int64) *Route {
+	sl := selector.NewSelector(selector.SelectorType(routeConfig.Strategy))
 
 	r := &Route{
 		PathPrefix:  routeConfig.PathPrefix,

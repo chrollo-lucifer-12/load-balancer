@@ -1,8 +1,6 @@
 package main
 
 import (
-	"log"
-	"net/http"
 	_ "net/http/pprof"
 
 	"github.com/lb/internal/config"
@@ -15,14 +13,6 @@ import (
 )
 
 func main() {
-
-	go func() {
-		log.Println("pprof listening on :6060")
-
-		if err := http.ListenAndServe(":6060", nil); err != nil {
-			log.Fatal(err)
-		}
-	}()
 
 	metrics.NewMetrics()
 

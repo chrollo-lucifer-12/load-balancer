@@ -2,6 +2,7 @@ package vhost
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/lb/internal/config"
@@ -13,6 +14,7 @@ import (
 
 type VHost struct {
 	handler http.Handler
+	static  http.Handler
 
 	routes []*Route
 	sl     selector.Selector
@@ -33,10 +35,20 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 		timeout:             time.Duration(vhostConfig.HealthCheck.Timeout) * time.Second,
 	}
 
+	if vhostConfig.Static.Enabled {
+		vh.static = http.StripPrefix(
+			vhostConfig.Static.Path,
+			http.FileServer(
+				http.Dir(vhostConfig.Static.Directory),
+			),
+		)
+	}
+
 	routes := make([]*Route, len(vhostConfig.Rules))
 
 	for i, routeConfig := range vhostConfig.Rules {
-		route := NewRoute(routeConfig, selector.SelectorType(vhostConfig.Strategy), int64(maxFailCount))
+
+		route := NewRoute(routeConfig, int64(maxFailCount))
 
 		routes[i] = route
 	}
@@ -59,10 +71,14 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 func (vh *VHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rec := rw.NewResponseWrapper(w)
 	vh.handler.ServeHTTP(rec, r)
-
 }
 
 func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
+
+	if vh.static != nil && strings.HasPrefix(r.URL.Path, "/static") {
+		vh.static.ServeHTTP(w, r)
+		return
+	}
 
 	route := vh.matchRoute(r)
 

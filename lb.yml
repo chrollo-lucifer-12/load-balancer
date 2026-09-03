@@ -15,22 +15,29 @@ rate_limiter:
 circuit_breaker:
   enabled: true
   failure_threshold: 0.5
-  rolling_window: "10s"
-  open_timeout: "10s"
+  rolling_window: 10
+  open_timeout: 10
   half_open_requests: 5
 
 virtual_hosts:
+
+  - host: "static"
+
+    static:
+      enabled: true
+      directory: "./public"
+      path: "/static"
+
   - host: "example.com"
 
     health_check:
       enabled: true
       path: "/health"
-      interval: "10s"
-      timeout: "5s"
+      interval: 10
+      timeout: 5
       max_failures: 3
 
     routes:
-
       - name: "api"
         path: "/api"
         strategy: "power_of_two"
@@ -56,8 +63,3 @@ virtual_hosts:
           - name: "admin-1"
             url: "http://localhost:7001"
             weight: 1
-
-      - name: "static"
-        path: "/static"
-        type: "static"
-        directory: "./public"

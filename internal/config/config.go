@@ -19,9 +19,18 @@ type RateLimiterConfig struct {
 
 type VirtualHost struct {
 	Host        string            `yaml:"host"`
+	Rules       []RuleConfig      `yaml:"rules"`
 	Backends    []BackendConfig   `yaml:"backends"`
 	Strategy    string            `yaml:"strategy"`
 	HealthCheck HealthCheckConfig `yaml:"health_check"`
+}
+
+type RuleConfig struct {
+	PathPrefix  string            `yaml:"path"`
+	Method      string            `yaml:"method,omitempty"`
+	Headers     map[string]string `yaml:"headers,omitempty"`
+	Backends    []BackendConfig   `yaml:"backends,omitempty"`
+	StripPrefix string            `yaml:"strip,omitempty"`
 }
 
 type ServerConfig struct {

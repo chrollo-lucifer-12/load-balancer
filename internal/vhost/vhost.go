@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/lb/internal/backend"
 	"github.com/lb/internal/config"
 	"github.com/lb/internal/middleware"
 	"github.com/lb/internal/rw"
@@ -15,39 +14,30 @@ import (
 type VHost struct {
 	handler http.Handler
 
-	backends []*backend.Backend
-	sl       selector.Selector
+	routes []*Route
+	sl     selector.Selector
 
 	healthCheckInterval time.Duration
 }
 
 func NewVHost(vhostConfig config.VirtualHost) *VHost {
 
-	sl := selector.NewSelector(selector.SelectorType(vhostConfig.Strategy))
 	maxFailCount := vhostConfig.HealthCheck.MaxFailures
 	healthCheckInterval := vhostConfig.HealthCheck.Interval
 
 	vh := &VHost{
-		sl:                  sl,
 		healthCheckInterval: time.Duration(healthCheckInterval) * time.Second,
 	}
 
-	backends := make([]*backend.Backend, len(vhostConfig.Backends))
+	routes := make([]*Route, len(vhostConfig.Rules))
 
-	for i, backendConfig := range vhostConfig.Backends {
-		backend, err := backend.NewBackend(backendConfig.URL, backendConfig.Weight, int64(maxFailCount))
-		if err != nil {
-			return nil
-		}
+	for i, routeConfig := range vhostConfig.Rules {
+		route := NewRoute(routeConfig, selector.SelectorType(vhostConfig.Strategy), int64(maxFailCount))
 
-		backends[i] = backend
+		routes[i] = route
 	}
 
-	vh.backends = backends
-
 	var handler http.Handler = http.HandlerFunc(vh.serve)
-
-	//	handler = middleware.Logger(handler)
 
 	cb := circuitbreaker.NewCircuitBreaker()
 
@@ -68,10 +58,18 @@ func (vh *VHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 
+	route := vh.matchRoute(r)
+
+	if route == nil {
+		http.NotFound(w, r)
+		return
+	}
+
 	attempts := 3
 
 	for i := 1; i <= attempts; i++ {
-		backend := vh.choose(w, r)
+
+		backend := route.choose(w, r)
 		if backend == nil {
 			http.Error(w, "No available backends", http.StatusServiceUnavailable)
 			return
@@ -96,10 +94,16 @@ func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func isIdempotent(r *http.Request) bool {
-	return r.Method == "GET" || r.Method == "HEAD" || r.Method == "PUT" || r.Method == "DELETE"
+func (v *VHost) matchRoute(r *http.Request) *Route {
+	for _, route := range v.routes {
+		if route.Matches(r) {
+			return route
+		}
+	}
+
+	return nil
 }
 
-func (vh *VHost) choose(w http.ResponseWriter, r *http.Request) *backend.Backend {
-	return vh.sl.Choose(vh.backends, w, r)
+func isIdempotent(r *http.Request) bool {
+	return r.Method == "GET" || r.Method == "HEAD" || r.Method == "PUT" || r.Method == "DELETE"
 }

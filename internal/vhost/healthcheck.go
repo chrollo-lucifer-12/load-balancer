@@ -30,30 +30,27 @@ func isBackendAlive(u *url.URL) bool {
 func (vh *VHost) checkBackends() {
 	var wg sync.WaitGroup
 
-	for _, b := range vh.backends {
-		if b == nil || b.URL == nil {
-			continue
+	for _, r := range vh.routes {
+
+		for _, b := range r.backends {
+
+			if b == nil || b.URL == nil {
+				continue
+			}
+
+			wg.Add(1)
+
+			go func(b *backend.Backend) {
+				defer wg.Done()
+
+				alive := isBackendAlive(b.URL)
+
+				b.UpdateActiveStatus(alive)
+			}(b)
 		}
-
-		wg.Add(1)
-
-		go func(b *backend.Backend) {
-			defer wg.Done()
-
-			alive := isBackendAlive(b.URL)
-
-			// log.Printf(
-			// 	"health update for %s: alive=%t",
-			// 	b.URL,
-			// 	alive,
-			// )
-
-			b.UpdateActiveStatus(alive)
-		}(b)
 	}
 
 	wg.Wait()
-	// log.Println("health check completed")
 }
 
 func (vh *VHost) healthCheck() {

@@ -22,7 +22,7 @@ func Start(addr string, lb http.Handler, middlewares ...middleware.Middleware) {
 
 	handler = mw(handler)
 
-	mux.Handle("/", lb)
+	mux.Handle("/", handler)
 
 	srv := &http.Server{
 		Handler: mux,

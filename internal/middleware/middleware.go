@@ -13,13 +13,15 @@ type Middleware func(http.Handler) http.Handler
 func Recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
-			if err := recover(); err != nil {
-				log.Printf("panic: %v\n%s", err, debug.Stack())
+			if v := recover(); v != nil {
+				if v == http.ErrAbortHandler {
+					return
+				}
 
-				http.Error(w, "internal server error",
-					http.StatusInternalServerError)
+				log.Printf("panic: %v\n%s", v, debug.Stack())
 			}
 		}()
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -37,24 +39,6 @@ func RateLimit(limiter ratelimiter.RateLimiter) Middleware {
 		})
 	}
 }
-
-// func Metric(next http.Handler) http.Handler {
-// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-// 		metrics.MetricsRecord.RequestsTotal.Add(1)
-// 		metrics.MetricsRecord.RequestsInFlight.Add(1)
-
-// 		defer metrics.MetricsRecord.RequestsInFlight.Add(-1)
-
-// 		next.ServeHTTP(w, r)
-
-// 		if rw, ok := w.(*rw.ResponseWrapper); ok {
-// 			if rw.Status >= 500 {
-// 				metrics.MetricsRecord.RequestsFailed.Add(1)
-// 			}
-// 		}
-// 	})
-// }
 
 func Chain(middlewares ...Middleware) Middleware {
 	return func(h http.Handler) http.Handler {

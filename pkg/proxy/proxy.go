@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -46,18 +45,6 @@ func NewProxy(u *url.URL, onResponse ResponseObserver) *httputil.ReverseProxy {
 			pr.SetURL(u)
 			pr.Out.Host = originalHost
 			pr.SetXForwarded()
-		},
-
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-
-			log.Printf(
-				"proxy error backend=%s path=%s err=%v",
-				u.String(),
-				r.URL.Path,
-				err,
-			)
-
-			w.WriteHeader(http.StatusBadGateway)
 		},
 
 		ModifyResponse: func(r *http.Response) error {

@@ -14,7 +14,6 @@ import (
 type Route struct {
 	PathPrefix  string
 	Method      string
-	Headers     map[string]string
 	backends    []*backend.Backend
 	StripPrefix string
 
@@ -22,13 +21,12 @@ type Route struct {
 	handler  http.Handler
 }
 
-func NewRoute(routeConfig config.RuleConfig, maxFailCount int64) *Route {
+func NewRoute(routeConfig config.RouteConfig, maxFailCount int64) *Route {
 	sl := selector.NewSelector(selector.SelectorType(routeConfig.Strategy))
 
 	r := &Route{
 		PathPrefix:  routeConfig.PathPrefix,
 		Method:      routeConfig.Method,
-		Headers:     routeConfig.Headers,
 		StripPrefix: routeConfig.StripPrefix,
 		selector:    sl,
 	}
@@ -97,6 +95,7 @@ func (rt *Route) choose(w http.ResponseWriter, r *http.Request) *backend.Backend
 }
 
 func (rt *Route) Matches(r *http.Request) bool {
+
 	if rt.PathPrefix != "" &&
 		!strings.HasPrefix(r.URL.Path, rt.PathPrefix) {
 		return false
@@ -104,12 +103,6 @@ func (rt *Route) Matches(r *http.Request) bool {
 
 	if rt.Method != "" && rt.Method != r.Method {
 		return false
-	}
-
-	for key, value := range rt.Headers {
-		if r.Header.Get(key) != value {
-			return false
-		}
 	}
 
 	return true

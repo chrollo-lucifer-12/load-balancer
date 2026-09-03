@@ -9,7 +9,7 @@ import (
 func main() {
 	port := os.Args[1]
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello from backend %s\n", port)
 	})
 

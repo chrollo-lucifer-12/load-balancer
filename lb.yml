@@ -14,12 +14,6 @@ rate_limiter:
   rate: 100
   burst: 200
 
-circuit_breaker:
-  enabled: true
-  failure_threshold: 0.5
-  rolling_window: 10
-  open_timeout: 10
-  half_open_requests: 5
 
 virtual_hosts:
 
@@ -48,11 +42,11 @@ virtual_hosts:
 
         backends:
           - name: "api-1"
-            url: "http://localhost:9001"
+            url: "http://localhost:8081"
             weight: 1
 
           - name: "api-2"
-            url: "http://localhost:9002"
+            url: "http://localhost:8082"
             weight: 1
 
       - name: "admin"
@@ -63,5 +57,5 @@ virtual_hosts:
 
         backends:
           - name: "admin-1"
-            url: "http://localhost:7001"
+            url: "http://localhost:8083"
             weight: 1

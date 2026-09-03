@@ -1,6 +1,7 @@
 package vhost
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -42,14 +43,21 @@ func NewVHost(vhostConfig config.VirtualHost) *VHost {
 		)
 	}
 
-	routes := make([]*Route, len(vhostConfig.Rules))
+	routes := make([]*Route, len(vhostConfig.Routes))
 
-	for i, routeConfig := range vhostConfig.Rules {
+	for i, routeConfig := range vhostConfig.Routes {
 
 		route := NewRoute(routeConfig, int64(maxFailCount))
 
+		if route == nil {
+			log.Printf("failed to create route")
+			continue
+		}
+
 		routes[i] = route
 	}
+
+	vh.routes = routes
 
 	var handler http.Handler = http.HandlerFunc(vh.serve)
 
@@ -94,11 +102,15 @@ func (vh *VHost) serve(w http.ResponseWriter, r *http.Request) {
 		if failed && isIdempotent(r) && i < attempts {
 			continue
 		}
+
+		return
 	}
 
+	http.Error(w, "Request failed", http.StatusBadGateway)
 }
 
 func (v *VHost) matchRoute(r *http.Request) *Route {
+
 	for _, route := range v.routes {
 		if route.Matches(r) {
 			return route
